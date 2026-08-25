@@ -35,6 +35,25 @@ echo "=== Creating Secret Manager secrets (empty — fill in later) ==="
 gcloud secrets create github-app-key --replication-policy=automatic || echo "Secret already exists"
 gcloud secrets create github-webhook-secret --replication-policy=automatic || echo "Secret already exists"
 
+echo "=== Setting IAM roles for default compute service account ==="
+PROJECT_NUMBER=$(gcloud projects describe "$PROJECT" --format="value(projectNumber)")
+SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+for role in roles/storage.objectAdmin roles/artifactregistry.writer roles/datastore.user roles/aiplatform.user roles/secretmanager.secretAccessor roles/pubsub.publisher roles/logging.logWriter roles/cloudtrace.agent; do
+  gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$SA" --role="$role" --quiet || true
+done
+
+echo "=== Creating Pub/Sub push subscription ==="
+SERVICE_URL=$(gcloud run services describe launchpad-ai --region="$REGION" --project="$PROJECT" --format="value(status.url)" 2>/dev/null || echo "")
+if [ -n "$SERVICE_URL" ]; then
+  gcloud pubsub subscriptions create launchpad-ai-events-push \
+    --topic=launchpad-ai-events \
+    --push-endpoint="${SERVICE_URL}/process" \
+    --dead-letter-topic=launchpad-ai-dead-letter \
+    --max-delivery-attempts=5 \
+    --ack-deadline=600 \
+    --project="$PROJECT" || echo "Subscription already exists"
+fi
+
 echo ""
 echo "=== Verification ==="
 echo "--- Enabled APIs ---"
