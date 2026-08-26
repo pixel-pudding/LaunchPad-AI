@@ -18,3 +18,7 @@ dev = [
     "pytest>=8.0",
     "httpx>=0.27.0",
 ]
+
+[tool.setuptools]
+packages = ["agent", "agent.subagents", "agent.tools", "ingest", "eval"]
+
