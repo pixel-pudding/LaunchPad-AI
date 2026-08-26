@@ -7,6 +7,7 @@ WORKDIR /app
 COPY pyproject.toml ./
 COPY agent/ ./agent/
 COPY ingest/ ./ingest/
+COPY infra/ ./infra/
 
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir .
