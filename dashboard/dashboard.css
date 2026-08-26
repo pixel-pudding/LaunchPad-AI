@@ -105,6 +105,104 @@ body {
     text-transform: uppercase;
 }
 
+.header-status {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.25rem 0.65rem;
+    border-radius: 99px;
+    border: 1px solid;
+}
+
+.status-live {
+    background: var(--green-bg);
+    color: var(--green);
+    border-color: var(--green-border);
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: blink 2s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+.model-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: var(--purple-bg);
+    color: var(--purple);
+    border: 1px solid var(--purple-border);
+    padding: 0.25rem 0.6rem;
+    border-radius: 99px;
+    letter-spacing: 0.02em;
+}
+
+/* ── Observability Bar ─────────────────────────────────────── */
+.observability-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.85rem 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 2rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.obs-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.obs-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.obs-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--surface-hover);
+    border: 1px solid var(--border-light);
+    padding: 0.3rem 0.65rem;
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    transition: all var(--transition);
+}
+
+.obs-link:hover {
+    color: var(--accent);
+    background: var(--accent-light);
+    border-color: var(--accent-light);
+    transform: translateY(-1px);
+}
+
 /* ── Main ──────────────────────────────────────────────────── */
 .main {
     max-width: 960px;
