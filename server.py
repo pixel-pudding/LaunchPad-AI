@@ -199,24 +199,26 @@ async def api_latest_post() -> dict:
         from google.cloud import firestore as firestore_client
 
         db = firestore_client.Client()
+        # Query recent decisions ordered by timestamp, filter in Python to avoid composite index requirement
         docs = (
             db.collection("decisions")
-            .where("action", "in", ["flagship", "update", "feature_new", "update_existing"])
             .order_by("ts", direction=firestore_client.Query.DESCENDING)
-            .limit(1)
+            .limit(20)
             .stream()
         )
+        valid_actions = {"flagship", "update", "feature_new", "update_existing"}
         for doc in docs:
             data = doc.to_dict()
-            artifacts = data.get("artifacts", {})
-            return {
-                "repo": data.get("repo", ""),
-                "action": data.get("action", ""),
-                "reasoning": data.get("reasoning", ""),
-                "post_package": artifacts.get("post_package", {}),
-                "readme_pr": artifacts.get("readme_pr", ""),
-                "portfolio_pr": artifacts.get("portfolio_pr", ""),
-            }
+            if data.get("action") in valid_actions:
+                artifacts = data.get("artifacts", {})
+                return {
+                    "repo": data.get("repo", ""),
+                    "action": data.get("action", ""),
+                    "reasoning": data.get("reasoning", ""),
+                    "post_package": artifacts.get("post_package", {}),
+                    "readme_pr": artifacts.get("readme_pr", ""),
+                    "portfolio_pr": artifacts.get("portfolio_pr", ""),
+                }
         return {}
     except Exception:
         logger.exception("Error fetching latest post")
