@@ -3,11 +3,10 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# Copy project config and source directories
+# Copy project config and package source directories
 COPY pyproject.toml ./
 COPY agent/ ./agent/
 COPY ingest/ ./ingest/
-COPY eval/ ./eval/
 
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir .

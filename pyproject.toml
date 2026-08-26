@@ -20,5 +20,6 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["agent", "agent.subagents", "agent.tools", "ingest", "eval"]
+packages = ["agent", "agent.subagents", "agent.tools", "ingest"]
+
 
