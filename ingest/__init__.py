@@ -64,28 +64,31 @@ def _verify_signature(payload: bytes, signature_header: str | None) -> None:
         raise HTTPException(status_code=401, detail="Invalid signature")
 
 
-def _build_pubsub_message(event: dict[str, Any]) -> dict[str, Any]:
+def _build_pubsub_message(event: dict[str, Any], delivery_id: str) -> dict[str, Any]:
     """
-    Build the frozen-contract Pub/Sub message from a GitHub push event.
+    Build the Pub/Sub message from a GitHub release event.
 
-    Schema (WORK_SPLIT.md §1):
+    Schema:
     {
         "delivery_id": "str",
+        "event_type": "release",
         "repo": "owner/name",
-        "default_branch": "main",
-        "commits": [{"message": "str"}],
-        "pusher": "str"
+        "tag": "v1.0.0",
+        "release_name": "Release Title"
     }
     """
     repo = event.get("repository", {})
-    commits_raw = event.get("commits", [])
+    release = event.get("release", {})
+
+    tag = release.get("tag_name", "")
+    release_name = release.get("name") or tag
 
     return {
-        "delivery_id": event.get("delivery", ""),
+        "delivery_id": delivery_id,
+        "event_type": "release",
         "repo": repo.get("full_name", ""),
-        "default_branch": repo.get("default_branch", "main"),
-        "commits": [{"message": c.get("message", "")} for c in commits_raw],
-        "pusher": event.get("pusher", {}).get("name", ""),
+        "tag": tag,
+        "release_name": release_name,
     }
 
 
@@ -100,8 +103,8 @@ async def webhook(
     GitHub webhook endpoint.
 
     1. Verify HMAC signature (Secret Manager).
-    2. Ignore non-push events.
-    3. Build the §1 Pub/Sub message and publish.
+    2. Handle ping and filter for release.published events.
+    3. Build the Pub/Sub message and publish.
     4. Return 200 immediately.
     """
     body = await request.body()
@@ -109,20 +112,30 @@ async def webhook(
     # 1. Verify HMAC
     _verify_signature(body, x_hub_signature_256)
 
-    # 2. Only process push events
-    if x_github_event != "push":
-        logger.info("Ignoring non-push event: %s", x_github_event)
-        return Response(status_code=200, content="ignored")
+    delivery_id = x_github_delivery or ""
+
+    # Handle GitHub webhook handshake ping
+    if x_github_event == "ping":
+        logger.info("Received GitHub ping event. Webhook verification successful.")
+        return Response(status_code=200, content="pong")
+
+    # 2. Only process release events with action == 'published'
+    if x_github_event != "release":
+        logger.info("Ignoring non-release event: %s", x_github_event)
+        return Response(status_code=200, content="ignored non-release event")
+
+    event = json.loads(body)
+    action = event.get("action")
+    if action != "published":
+        logger.info("Ignoring release action: %s (only 'published' is processed)", action)
+        return Response(status_code=200, content=f"ignored release action {action}")
 
     # 3. Parse and build the Pub/Sub message
-    event = json.loads(body)
-    # Inject the delivery ID from the header (more reliable than body)
-    event["delivery"] = x_github_delivery or ""
-
-    message = _build_pubsub_message(event)
+    message = _build_pubsub_message(event, delivery_id)
     logger.info(
-        "Publishing event for repo=%s delivery=%s",
+        "Publishing release event for repo=%s tag=%s delivery=%s",
         message["repo"],
+        message["tag"],
         message["delivery_id"],
     )
 
@@ -131,7 +144,7 @@ async def webhook(
     topic = f"projects/{project}/topics/launchpad-ai-events"
     publisher = _get_publisher()
     future = publisher.publish(topic, json.dumps(message).encode("utf-8"))
-    future.result()  # Block until published (still fast — Pub/Sub is <50ms)
+    future.result()  # Block until published (<50ms)
 
     logger.info("Published to Pub/Sub: delivery=%s", message["delivery_id"])
     return Response(status_code=200, content="ok")
