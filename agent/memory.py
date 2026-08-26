@@ -1,0 +1,95 @@
+"""
+LaunchPad-AI — Firestore memory accessors (agent/memory.py).
+
+Collection contract is frozen in CLAUDE.md (adapted from WORK_SPLIT.md §1).
+Do not rename a collection or field here without agreeing it with [AG] first.
+
+Every accessor takes an optional `client` so callers (tests) can inject a
+fake Firestore client instead of hitting real GCP.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
+from typing import Any
+
+from google.cloud import firestore
+
+logger = logging.getLogger(__name__)
+
+_client: firestore.Client | None = None
+
+
+def get_client() -> firestore.Client:
+    """Lazily creates the shared Firestore client (real GCP, or the emulator
+    if FIRESTORE_EMULATOR_HOST is set)."""
+    global _client
+    if _client is None:
+        _client = firestore.Client()
+    return _client
+
+
+def _doc_id(repo: str) -> str:
+    """Firestore document IDs can't contain '/', which repo names ('owner/name') do."""
+    return repo.replace("/", "__")
+
+
+# ── projects/{repo} — what's currently featured on portfolio + LinkedIn ──
+
+
+def get_project(repo: str, client: firestore.Client | None = None) -> dict[str, Any] | None:
+    client = client or get_client()
+    doc = client.collection("projects").document(_doc_id(repo)).get()
+    return doc.to_dict() if doc.exists else None
+
+
+def list_projects(client: firestore.Client | None = None) -> list[dict[str, Any]]:
+    client = client or get_client()
+    return [doc.to_dict() for doc in client.collection("projects").stream()]
+
+
+def upsert_project(repo: str, data: dict[str, Any], client: firestore.Client | None = None) -> None:
+    client = client or get_client()
+    client.collection("projects").document(_doc_id(repo)).set(data, merge=True)
+
+
+# ── context/profile — dev's past projects + interests (decision CONTEXT only) ──
+
+
+def get_context_profile(client: firestore.Client | None = None) -> dict[str, Any]:
+    client = client or get_client()
+    doc = client.collection("context").document("profile").get()
+    return doc.to_dict() if doc.exists else {}
+
+
+# ── voice/profile — post voice ───────────────────────────────────────────
+
+
+def get_voice_profile(client: firestore.Client | None = None) -> dict[str, Any]:
+    client = client or get_client()
+    doc = client.collection("voice").document("profile").get()
+    return doc.to_dict() if doc.exists else {}
+
+
+# ── idempotency/{delivery_id} — dedupe on release delivery ──────────────
+
+
+def is_duplicate_delivery(delivery_id: str, client: firestore.Client | None = None) -> bool:
+    client = client or get_client()
+    return client.collection("idempotency").document(delivery_id).get().exists
+
+
+def mark_delivery_processed(delivery_id: str, client: firestore.Client | None = None) -> None:
+    client = client or get_client()
+    client.collection("idempotency").document(delivery_id).set(
+        {"processed_at": datetime.now(timezone.utc).isoformat()}
+    )
+
+
+# ── decisions/{delivery_id} — the decision log ───────────────────────────
+
+
+def save_decision(delivery_id: str, record: dict[str, Any], client: firestore.Client | None = None) -> None:
+    client = client or get_client()
+    client.collection("decisions").document(delivery_id).set(record)

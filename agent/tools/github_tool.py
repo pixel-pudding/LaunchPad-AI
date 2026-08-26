@@ -1,0 +1,206 @@
+"""
+LaunchPad-AI — GitHub tool (agent/tools/github_tool.py).
+
+Implements the github_* tool signatures frozen in CLAUDE.md. Auth is via a
+GitHub App: a short-lived JWT signed with the App's private key (fetched from
+Secret Manager, secret `github-app-key`) is exchanged for an installation
+access token, which is what actually calls the REST API. No token is ever
+hardcoded — env vars only name *which* app/installation, never a secret.
+
+Required env vars: GOOGLE_CLOUD_PROJECT, GITHUB_APP_ID.
+Optional: GITHUB_APP_INSTALLATION_ID (skips the installations lookup call).
+"""
+
+from __future__ import annotations
+
+import base64
+import logging
+import os
+import re
+import time
+from typing import Any
+
+import requests
+from google.auth import crypt, jwt
+from google.cloud import secretmanager
+
+logger = logging.getLogger(__name__)
+
+_GITHUB_API = "https://api.github.com"
+_JWT_TTL_SECONDS = 8 * 60  # GitHub caps App JWTs at 10 minutes; leave margin.
+_TOKEN_REFRESH_MARGIN_SECONDS = 5 * 60  # refresh before GitHub's ~1hr expiry
+
+_secret_client: secretmanager.SecretManagerServiceClient | None = None
+_app_private_key: str | None = None
+_installation_token: str | None = None
+_installation_token_expires_at: float = 0.0
+
+
+def _get_secret_client() -> secretmanager.SecretManagerServiceClient:
+    global _secret_client
+    if _secret_client is None:
+        _secret_client = secretmanager.SecretManagerServiceClient()
+    return _secret_client
+
+
+def _get_app_private_key() -> str:
+    """Fetches the GitHub App's PEM private key from Secret Manager (cached)."""
+    global _app_private_key
+    if _app_private_key is not None:
+        return _app_private_key
+    project = os.environ["GOOGLE_CLOUD_PROJECT"]
+    name = f"projects/{project}/secrets/github-app-key/versions/latest"
+    response = _get_secret_client().access_secret_version(request={"name": name})
+    _app_private_key = response.payload.data.decode("utf-8")
+    return _app_private_key
+
+
+def _build_app_jwt() -> str:
+    app_id = os.environ["GITHUB_APP_ID"]
+    now = int(time.time())
+    payload = {"iat": now - 60, "exp": now + _JWT_TTL_SECONDS, "iss": app_id}
+    signer = crypt.RSASigner.from_string(_get_app_private_key())
+    return jwt.encode(signer, payload).decode("utf-8")
+
+
+def _get_installation_id(jwt_token: str) -> str:
+    override = os.environ.get("GITHUB_APP_INSTALLATION_ID")
+    if override:
+        return override
+    resp = requests.get(
+        f"{_GITHUB_API}/app/installations",
+        headers={"Authorization": f"Bearer {jwt_token}", "Accept": "application/vnd.github+json"},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    installations = resp.json()
+    if not installations:
+        raise RuntimeError("GitHub App has no installations — install it on the target account.")
+    return str(installations[0]["id"])
+
+
+def _get_installation_token() -> str:
+    """Returns a cached installation access token, refreshing it once it's near expiry."""
+    global _installation_token, _installation_token_expires_at
+    if _installation_token and time.time() < _installation_token_expires_at:
+        return _installation_token
+
+    jwt_token = _build_app_jwt()
+    installation_id = _get_installation_id(jwt_token)
+    resp = requests.post(
+        f"{_GITHUB_API}/app/installations/{installation_id}/access_tokens",
+        headers={"Authorization": f"Bearer {jwt_token}", "Accept": "application/vnd.github+json"},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    _installation_token = data["token"]
+    _installation_token_expires_at = time.time() + (60 * 60) - _TOKEN_REFRESH_MARGIN_SECONDS
+    return _installation_token
+
+
+def _auth_headers() -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {_get_installation_token()}",
+        "Accept": "application/vnd.github+json",
+    }
+
+
+_IMAGE_RE = re.compile(r"!\[[^\]]*\]\((?P<url>[^)\s]+)")
+
+
+def _extract_images(readme_text: str) -> list[str]:
+    return _IMAGE_RE.findall(readme_text)
+
+
+def github_get_repo(repo: str) -> dict[str, Any]:
+    """Fetches repo metadata, README, languages, and top-level tree.
+
+    Returns: {name, description, readme, langs, tree, images[]}
+    """
+    headers = _auth_headers()
+
+    repo_resp = requests.get(f"{_GITHUB_API}/repos/{repo}", headers=headers, timeout=10)
+    repo_resp.raise_for_status()
+    repo_data = repo_resp.json()
+
+    readme_text = ""
+    readme_resp = requests.get(f"{_GITHUB_API}/repos/{repo}/readme", headers=headers, timeout=10)
+    if readme_resp.status_code == 200:
+        content = readme_resp.json().get("content", "")
+        readme_text = base64.b64decode(content).decode("utf-8", errors="replace")
+
+    langs_resp = requests.get(f"{_GITHUB_API}/repos/{repo}/languages", headers=headers, timeout=10)
+    langs_resp.raise_for_status()
+    langs = list(langs_resp.json().keys())
+
+    tree_resp = requests.get(f"{_GITHUB_API}/repos/{repo}/contents", headers=headers, timeout=10)
+    tree = [item["name"] for item in tree_resp.json()] if tree_resp.status_code == 200 else []
+
+    return {
+        "name": repo_data.get("name", repo),
+        "description": repo_data.get("description") or "",
+        "readme": readme_text,
+        "langs": langs,
+        "tree": tree,
+        "images": _extract_images(readme_text),
+    }
+
+
+def github_open_pr(repo: str, branch: str, title: str, body: str, files: dict[str, str]) -> str:
+    """Creates `branch` off the default branch, commits `files` (path -> content)
+    onto it, and opens a PR into the default branch. Returns the PR URL.
+    """
+    headers = _auth_headers()
+
+    repo_resp = requests.get(f"{_GITHUB_API}/repos/{repo}", headers=headers, timeout=10)
+    repo_resp.raise_for_status()
+    default_branch = repo_resp.json()["default_branch"]
+
+    ref_resp = requests.get(
+        f"{_GITHUB_API}/repos/{repo}/git/ref/heads/{default_branch}", headers=headers, timeout=10
+    )
+    ref_resp.raise_for_status()
+    base_sha = ref_resp.json()["object"]["sha"]
+
+    branch_resp = requests.post(
+        f"{_GITHUB_API}/repos/{repo}/git/refs",
+        headers=headers,
+        json={"ref": f"refs/heads/{branch}", "sha": base_sha},
+        timeout=10,
+    )
+    branch_resp.raise_for_status()
+
+    for path, content in files.items():
+        put_resp = requests.put(
+            f"{_GITHUB_API}/repos/{repo}/contents/{path}",
+            headers=headers,
+            json={
+                "message": f"LaunchPad-AI: update {path}",
+                "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+                "branch": branch,
+            },
+            timeout=10,
+        )
+        put_resp.raise_for_status()
+
+    pr_resp = requests.post(
+        f"{_GITHUB_API}/repos/{repo}/pulls",
+        headers=headers,
+        json={"title": title, "body": body, "head": branch, "base": default_branch},
+        timeout=10,
+    )
+    pr_resp.raise_for_status()
+    return pr_resp.json()["html_url"]
+
+
+def github_open_issue(repo: str, title: str, body: str) -> str:
+    """Opens an issue on `repo`. Returns the issue URL."""
+    resp = requests.post(
+        f"{_GITHUB_API}/repos/{repo}/issues",
+        headers=_auth_headers(),
+        json={"title": title, "body": body},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json()["html_url"]
