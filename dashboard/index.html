@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LaunchPad-AI — Dashboard</title>
+    <meta name="description" content="LaunchPad-AI autonomous career agent dashboard — decision log and post-review card">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+    <!-- ── Header ──────────────────────────────────────────── -->
+    <header class="header">
+        <div class="header-inner">
+            <div class="logo">
+                <span class="logo-icon">🚀</span>
+                <h1>LaunchPad-AI</h1>
+            </div>
+            <p class="tagline">Autonomous Career Agent</p>
+        </div>
+    </header>
+
+    <main class="main">
+        <!-- ── Post Review Card (latest publishable release) ── -->
+        <section class="post-card-section" id="post-card-section">
+            <h2 class="section-title">📝 Post Review Card</h2>
+            <div class="post-card" id="post-card">
+                <div class="post-card-empty" id="post-card-empty">
+                    <p>No publishable releases yet. Push a meaningful release to trigger the agent!</p>
+                </div>
+                <div class="post-card-content" id="post-card-content" style="display:none;">
+                    <div class="post-meta">
+                        <span class="post-repo" id="post-repo"></span>
+                        <span class="post-action-badge" id="post-action-badge"></span>
+                    </div>
+                    <div class="post-reasoning" id="post-reasoning"></div>
+
+                    <div class="post-text-area">
+                        <label>LinkedIn Post</label>
+                        <div class="post-text" id="post-text"></div>
+                    </div>
+
+                    <div class="post-hashtags" id="post-hashtags"></div>
+
+                    <div class="post-image-container" id="post-image-container" style="display:none;">
+                        <img id="post-image" alt="Generated banner" />
+                    </div>
+
+                    <div class="post-actions">
+                        <button class="btn btn-copy" id="btn-copy" onclick="copyPostContent()">
+                            📋 Copy All
+                        </button>
+                        <a class="btn btn-linkedin" id="btn-linkedin" href="#" target="_blank" rel="noopener">
+                            🔗 Share on LinkedIn
+                        </a>
+                    </div>
+
+                    <div class="post-links" id="post-links"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Decision Log ────────────────────────────────── -->
+        <section class="decision-log-section">
+            <h2 class="section-title">📊 Decision Log</h2>
+            <div class="decision-log" id="decision-log">
+                <div class="decision-log-empty" id="decision-log-empty">
+                    <p>No agent runs recorded yet. The log will populate as releases are processed.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ── Footer ──────────────────────────────────────────── -->
+    <footer class="footer">
+        <p>LaunchPad-AI · All Things Agentic Hackathon · Powered by Google ADK + Gemini 3.5 Flash + Vertex AI</p>
+    </footer>
+
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>
