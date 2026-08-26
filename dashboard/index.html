@@ -15,13 +15,40 @@
         <div class="header-inner">
             <div class="logo">
                 <span class="logo-icon">🚀</span>
-                <h1>LaunchPad-AI</h1>
+                <div>
+                    <h1>LaunchPad-AI</h1>
+                    <p class="tagline">Autonomous Career Agent</p>
+                </div>
             </div>
-            <p class="tagline">Autonomous Career Agent</p>
+            <div class="header-status">
+                <span class="status-pill status-live">
+                    <span class="status-dot"></span> Live on Cloud Run
+                </span>
+                <span class="model-badge">Gemini 3.5 Flash</span>
+            </div>
         </div>
     </header>
 
     <main class="main">
+        <!-- ── Observability Bar ────────────────────────────── -->
+        <section class="observability-bar">
+            <span class="obs-title">GCP Observability:</span>
+            <div class="obs-links">
+                <a href="https://console.cloud.google.com/traces/list?project=launchpad-ai-506616" target="_blank" rel="noopener" class="obs-link" title="Open Google Cloud Trace">
+                    🔍 Cloud Trace
+                </a>
+                <a href="https://console.cloud.google.com/run/detail/asia-south1/launchpad-ai/logs?project=launchpad-ai-506616" target="_blank" rel="noopener" class="obs-link" title="Open Cloud Run Logs">
+                    📜 Cloud Run Logs
+                </a>
+                <a href="https://console.cloud.google.com/firestore/databases/-default-/data/panel?project=launchpad-ai-506616" target="_blank" rel="noopener" class="obs-link" title="Open Firestore Console">
+                    🗄️ Firestore Memory
+                </a>
+                <a href="https://console.cloud.google.com/cloudpubsub/topic/detail/launchpad-ai-events?project=launchpad-ai-506616" target="_blank" rel="noopener" class="obs-link" title="Open Pub/Sub Topic">
+                    📨 Pub/Sub Events
+                </a>
+            </div>
+        </section>
+
         <!-- ── Post Review Card (latest publishable release) ── -->
         <section class="post-card-section" id="post-card-section">
             <h2 class="section-title">📝 Post Review Card</h2>
@@ -74,7 +101,7 @@
 
     <!-- ── Footer ──────────────────────────────────────────── -->
     <footer class="footer">
-        <p>LaunchPad-AI · All Things Agentic Hackathon · Powered by Google ADK + Gemini 3.5 Flash + Vertex AI</p>
+        <p>LaunchPad-AI · All Things Agentic Hackathon (Taskmaster Track) · Powered by Google ADK + Gemini 3.5 Flash + Vertex AI + Cloud Run</p>
     </footer>
 
     <script src="/static/dashboard.js"></script>
