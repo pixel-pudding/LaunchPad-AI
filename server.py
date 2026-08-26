@@ -15,8 +15,11 @@ import json
 import logging
 import os
 
+from pathlib import Path
+
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 # ── ingest router (webhook) ──────────────────────────────────
 from ingest import router as webhook_router
@@ -35,6 +38,10 @@ app = FastAPI(
 
 # Mount the webhook router
 app.include_router(webhook_router)
+
+# Mount dashboard static files (CSS, JS)
+_dashboard_dir = Path(__file__).parent / "dashboard"
+app.mount("/static", StaticFiles(directory=str(_dashboard_dir)), name="static")
 
 
 # ── POST /process — Pub/Sub push handler ─────────────────────
@@ -138,46 +145,9 @@ async def process(request: Request) -> Response:
 # ── GET / — Dashboard ────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def dashboard() -> HTMLResponse:
-    """
-    Dashboard placeholder — will be replaced with the full decision log
-    and post-review card UI on Day 5.
-    """
-    return HTMLResponse(
-        content="""
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>LaunchPad-AI — Dashboard</title>
-            <style>
-                body {
-                    font-family: 'Inter', system-ui, sans-serif;
-                    display: flex; align-items: center; justify-content: center;
-                    min-height: 100vh; margin: 0;
-                    background: #fafafa; color: #1a1a1a;
-                }
-                .card {
-                    text-align: center; padding: 3rem;
-                    background: white; border-radius: 12px;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-                }
-                h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
-                p { color: #666; font-size: 0.95rem; }
-                .status { color: #22c55e; font-weight: 600; }
-            </style>
-        </head>
-        <body>
-            <div class="card">
-                <h1>🚀 LaunchPad-AI</h1>
-                <p class="status">Service is running</p>
-                <p>Dashboard coming Day 5 — decision log + post-review card</p>
-            </div>
-        </body>
-        </html>
-        """,
-        status_code=200,
-    )
+    """Serve the dashboard from dashboard/index.html."""
+    html_path = _dashboard_dir / "index.html"
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"), status_code=200)
 
 
 # ── GET /health — Health check ───────────────────────────────
