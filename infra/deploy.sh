@@ -18,7 +18,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --allow-unauthenticated \
   --port 8080 \
   --memory 512Mi \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=$REGION,GOOGLE_GENAI_USE_VERTEXAI=1,GEMINI_MODEL=gemini-2.5-flash" \
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=$REGION,GOOGLE_GENAI_USE_VERTEXAI=1,GEMINI_MODEL=gemini-2.5-flash,GITHUB_APP_ID=4721900" \
   --quiet
 
 echo ""
