@@ -111,3 +111,33 @@ def test_github_open_pr_includes_sha_for_existing_file(monkeypatch):
     github_tool.github_open_pr("owner/repo", "branch", "title", "body", {"projects.json": "[]"})
 
     assert put_calls[0]["sha"] == "existing-sha"
+
+
+def test_github_merge_pr_returns_merged_and_sha_on_success(monkeypatch):
+    monkeypatch.setattr(github_tool, "_auth_headers", lambda: {})
+    monkeypatch.setattr(
+        github_tool.requests,
+        "put",
+        lambda url, headers=None, timeout=None: _FakeResponse(json_data={"merged": True, "sha": "abc123"}),
+    )
+
+    result = github_tool.github_merge_pr("owner/repo", 7)
+
+    assert result == {"merged": True, "sha": "abc123"}
+
+
+def test_github_merge_pr_raises_on_failure(monkeypatch):
+    """Not mergeable / branch protection / permissions all surface as an
+    HTTP error status — raise_for_status() must actually raise, not swallow
+    it, so the caller (runner.py) can catch it and leave the PR open."""
+    monkeypatch.setattr(github_tool, "_auth_headers", lambda: {})
+    monkeypatch.setattr(
+        github_tool.requests,
+        "put",
+        lambda url, headers=None, timeout=None: _FakeResponse(status_code=405, json_data={"message": "not mergeable"}),
+    )
+
+    import pytest
+
+    with pytest.raises(RuntimeError):
+        github_tool.github_merge_pr("owner/repo", 7)
