@@ -70,10 +70,13 @@ def _generate_jwt() -> str:
     return token
 
 
-def _get_installation_id(jwt_token: str) -> int:
+_cached_tokens: dict[str, tuple[str, float]] = {}
+
+
+def _get_installation_id(jwt_token: str, owner: str | None = None) -> int:
     """
     Get the installation ID for our GitHub App.
-    We only have one installation (the user's account), so we take the first.
+    If owner is specified, matches the account login; otherwise falls back to the first installation.
     """
     headers = {
         "Authorization": f"Bearer {jwt_token}",
@@ -94,29 +97,43 @@ def _get_installation_id(jwt_token: str) -> int:
             "Ask the repo owner to install the app on their account."
         )
 
+    if owner:
+        owner_lower = owner.strip().lower()
+        for inst in installations:
+            account_login = inst.get("account", {}).get("login", "").lower()
+            if account_login == owner_lower:
+                return inst["id"]
+        logger.warning(
+            "No installation found specifically for owner '%s'. Falling back to first installation (%s)",
+            owner,
+            installations[0].get("account", {}).get("login"),
+        )
+
     return installations[0]["id"]
 
 
-def get_installation_token() -> str:
+def get_installation_token(owner: str | None = None) -> str:
     """
-    Return a valid GitHub installation access token, refreshing if needed.
-
-    Tokens are valid for 1 hour; we refresh 5 minutes early to avoid
-    race conditions with in-flight requests.
+    Return a valid GitHub installation access token for the given repo owner,
+    refreshing if needed. Tokens are valid for 1 hour.
     """
-    global _cached_token, _token_expires_at
+    global _cached_tokens
+    cache_key = (owner or "default").strip().lower()
+    now = time.time()
 
     # Return cached token if still valid (with 5 min buffer)
-    if _cached_token and time.time() < (_token_expires_at - 300):
-        return _cached_token
+    if cache_key in _cached_tokens:
+        token, expires_at = _cached_tokens[cache_key]
+        if now < (expires_at - 300):
+            return token
 
-    logger.info("Generating new GitHub installation token...")
+    logger.info("Generating new GitHub installation token (owner: %s)...", owner or "default")
 
     # Step 1: Generate JWT
     jwt_token = _generate_jwt()
 
-    # Step 2: Get installation ID
-    installation_id = _get_installation_id(jwt_token)
+    # Step 2: Get installation ID for the owner
+    installation_id = _get_installation_id(jwt_token, owner=owner)
 
     # Step 3: Exchange JWT for installation token
     headers = {
@@ -132,10 +149,8 @@ def get_installation_token() -> str:
     resp.raise_for_status()
     data = resp.json()
 
-    _cached_token = data["token"]
-    # Parse expiry from the response (ISO 8601 format)
-    # Default to 1 hour from now if not present
-    _token_expires_at = time.time() + 3600
+    token = data["token"]
+    _cached_tokens[cache_key] = (token, now + 3600)
 
-    logger.info("GitHub installation token acquired (expires in ~1h)")
-    return _cached_token
+    logger.info("GitHub installation token acquired for '%s' (expires in ~1h)", owner or "default")
+    return token
