@@ -222,6 +222,23 @@ def github_open_pr(repo: str, branch: str, title: str, body: str, files: dict[st
     return pr_resp.json()["html_url"]
 
 
+def github_merge_pr(repo: str, pr_number: int) -> dict[str, Any]:
+    """Merges pull request `pr_number` on `repo`. Returns {merged: bool, sha: str | None}.
+
+    Raises on failure (not mergeable, branch protection, permissions, a
+    conflicting head change, etc.) rather than reporting a failed merge as
+    successful — the caller decides how to degrade (leave the PR open).
+    """
+    resp = requests.put(
+        f"{_GITHUB_API}/repos/{repo}/pulls/{pr_number}/merge",
+        headers=_auth_headers(),
+        timeout=10,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    return {"merged": bool(data.get("merged", False)), "sha": data.get("sha")}
+
+
 def github_open_issue(repo: str, title: str, body: str) -> str:
     """Opens an issue on `repo`. Returns the issue URL."""
     resp = requests.post(
