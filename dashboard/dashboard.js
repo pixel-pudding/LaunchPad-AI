@@ -101,6 +101,7 @@ async function loadLatestPost() {
         const resp = await fetch("/api/latest-post");
         const post = await resp.json();
         renderPostCard(post);
+        renderNextBuilds(post);
     } catch (err) {
         console.error("Failed to load latest post:", err);
     }
@@ -154,12 +155,20 @@ function renderPostCard(post) {
         imgContainer.style.display = "none";
     }
 
-    // LinkedIn share link
+    // LinkedIn button: copy to clipboard + open composer
     const linkedinBtn = document.getElementById("btn-linkedin");
-    const shareText = encodeURIComponent(
-        (pkg.text || "") + "\n\n" + (pkg.hashtags || []).map(t => t.startsWith("#") ? t : `#${t}`).join(" ")
-    );
-    linkedinBtn.href = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://github.com/" + (post.repo || ""))}`;
+    linkedinBtn.onclick = (e) => {
+        e.preventDefault();
+        const fullText = (pkg.text || "") + "\n\n" +
+            (pkg.hashtags || []).map(t => t.startsWith("#") ? t : `#${t}`).join(" ");
+        navigator.clipboard.writeText(fullText).then(() => {
+            showToast("Copied! Paste into the LinkedIn composer.");
+            window.open("https://www.linkedin.com/feed/?shareActive=true", "_blank");
+        }).catch(() => {
+            showToast("Copy failed — select and copy manually.");
+            window.open("https://www.linkedin.com/feed/?shareActive=true", "_blank");
+        });
+    };
 
     // Links (PRs)
     const linksEl = document.getElementById("post-links");
@@ -170,6 +179,36 @@ function renderPostCard(post) {
     if (post.portfolio_pr) {
         linksEl.innerHTML += `<a class="post-link" href="${escapeHtml(post.portfolio_pr)}" target="_blank" rel="noopener">🖼️ Portfolio PR</a>`;
     }
+}
+
+
+// ── Next Builds Footnote Card ───────────────────────────────
+
+function renderNextBuilds(post) {
+    const section = document.getElementById("next-builds-section");
+    if (!section) return;
+
+    const nextBuilds = (post && post.next_builds) || [];
+
+    if (!nextBuilds.length) {
+        section.style.display = "none";
+        return;
+    }
+
+    section.style.display = "block";
+    section.innerHTML = `
+        <div class="next-builds-card">
+            <h3 class="next-builds-title">🔮 Next builds to grow your portfolio</h3>
+            <ul class="next-builds-list">
+                ${nextBuilds.map(b => `
+                    <li class="next-build-item">
+                        <span class="next-build-name">${escapeHtml(b.title || "")}</span>
+                        <span class="next-build-reason">${escapeHtml(b.one_line_reason || "")}</span>
+                    </li>
+                `).join("")}
+            </ul>
+        </div>
+    `;
 }
 
 
