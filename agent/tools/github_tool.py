@@ -67,6 +67,10 @@ def _get_installation_id(jwt_token: str) -> str:
     override = os.environ.get("GITHUB_APP_INSTALLATION_ID")
     if override:
         return override
+_installation_tokens: dict[str, tuple[str, float]] = {}
+
+
+def _get_installation_id(jwt_token: str, owner: str | None = None) -> str:
     resp = requests.get(
         f"{_GITHUB_API}/app/installations",
         headers={"Authorization": f"Bearer {jwt_token}", "Accept": "application/vnd.github+json"},
@@ -76,17 +80,29 @@ def _get_installation_id(jwt_token: str) -> str:
     installations = resp.json()
     if not installations:
         raise RuntimeError("GitHub App has no installations — install it on the target account.")
+
+    if owner:
+        owner_lower = owner.strip().lower()
+        for inst in installations:
+            if inst.get("account", {}).get("login", "").lower() == owner_lower:
+                return str(inst["id"])
+
     return str(installations[0]["id"])
 
 
-def _get_installation_token() -> str:
+def _get_installation_token(owner: str | None = None) -> str:
     """Returns a cached installation access token, refreshing it once it's near expiry."""
-    global _installation_token, _installation_token_expires_at
-    if _installation_token and time.time() < _installation_token_expires_at:
-        return _installation_token
+    global _installation_tokens
+    cache_key = (owner or "default").strip().lower()
+    now = time.time()
+
+    if cache_key in _installation_tokens:
+        token, expires_at = _installation_tokens[cache_key]
+        if now < expires_at:
+            return token
 
     jwt_token = _build_app_jwt()
-    installation_id = _get_installation_id(jwt_token)
+    installation_id = _get_installation_id(jwt_token, owner=owner)
     resp = requests.post(
         f"{_GITHUB_API}/app/installations/{installation_id}/access_tokens",
         headers={"Authorization": f"Bearer {jwt_token}", "Accept": "application/vnd.github+json"},
@@ -94,14 +110,15 @@ def _get_installation_token() -> str:
     )
     resp.raise_for_status()
     data = resp.json()
-    _installation_token = data["token"]
-    _installation_token_expires_at = time.time() + (60 * 60) - _TOKEN_REFRESH_MARGIN_SECONDS
-    return _installation_token
+    token = data["token"]
+    expires_at = now + (60 * 60) - _TOKEN_REFRESH_MARGIN_SECONDS
+    _installation_tokens[cache_key] = (token, expires_at)
+    return token
 
 
-def _auth_headers() -> dict[str, str]:
+def _auth_headers(owner: str | None = None) -> dict[str, str]:
     return {
-        "Authorization": f"Bearer {_get_installation_token()}",
+        "Authorization": f"Bearer {_get_installation_token(owner=owner)}",
         "Accept": "application/vnd.github+json",
     }
 
@@ -113,12 +130,20 @@ def _extract_images(readme_text: str) -> list[str]:
     return _IMAGE_RE.findall(readme_text)
 
 
+def _get_headers_for_owner(owner: str | None = None) -> dict[str, str]:
+    try:
+        return _auth_headers(owner)
+    except TypeError:
+        return _auth_headers()
+
+
 def github_get_repo(repo: str) -> dict[str, Any]:
     """Fetches repo metadata, README, languages, and top-level tree.
 
     Returns: {name, description, readme, langs, tree, images[]}
     """
-    headers = _auth_headers()
+    owner = repo.split("/")[0] if "/" in repo else None
+    headers = _get_headers_for_owner(owner)
 
     repo_resp = requests.get(f"{_GITHUB_API}/repos/{repo}", headers=headers, timeout=10)
     repo_resp.raise_for_status()
@@ -151,7 +176,8 @@ def github_get_file(repo: str, path: str, ref: str | None = None) -> str | None:
     """Fetches a file's raw text content from `repo` at `path` (optionally at
     a specific ref/branch). Returns None if the file doesn't exist (404).
     """
-    headers = _auth_headers()
+    owner = repo.split("/")[0] if "/" in repo else None
+    headers = _get_headers_for_owner(owner)
     params = {"ref": ref} if ref else {}
     resp = requests.get(
         f"{_GITHUB_API}/repos/{repo}/contents/{path}", headers=headers, params=params, timeout=10
@@ -172,7 +198,8 @@ def github_open_pr(repo: str, branch: str, title: str, body: str, files: dict[st
     rejects it entirely for a brand-new one), so each path is checked on the
     new branch first.
     """
-    headers = _auth_headers()
+    owner = repo.split("/")[0] if "/" in repo else None
+    headers = _get_headers_for_owner(owner)
 
     repo_resp = requests.get(f"{_GITHUB_API}/repos/{repo}", headers=headers, timeout=10)
     repo_resp.raise_for_status()
@@ -229,9 +256,10 @@ def github_merge_pr(repo: str, pr_number: int) -> dict[str, Any]:
     conflicting head change, etc.) rather than reporting a failed merge as
     successful — the caller decides how to degrade (leave the PR open).
     """
+    owner = repo.split("/")[0] if "/" in repo else None
     resp = requests.put(
         f"{_GITHUB_API}/repos/{repo}/pulls/{pr_number}/merge",
-        headers=_auth_headers(),
+        headers=_get_headers_for_owner(owner),
         timeout=10,
     )
     resp.raise_for_status()

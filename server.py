@@ -102,10 +102,12 @@ async def process(request: Request) -> Response:
         try:
             from infra.github_auth import get_installation_token
 
-            github_token = get_installation_token()
+            repo_name = event.get("repo", "")
+            repo_owner = repo_name.split("/")[0] if "/" in repo_name else None
+            github_token = get_installation_token(owner=repo_owner)
             # Inject into the event so the agent's github_tool can use it
             event["_github_token"] = github_token
-            logger.info("GitHub installation token injected for delivery=%s", delivery_id)
+            logger.info("GitHub installation token injected for delivery=%s (owner=%s)", delivery_id, repo_owner or "default")
         except Exception:
             logger.warning(
                 "Could not acquire GitHub token for delivery=%s — agent will run without PR capability",
