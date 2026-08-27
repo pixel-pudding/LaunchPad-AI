@@ -62,11 +62,11 @@ def _patch_common(monkeypatch, existing_projects_json):
 def test_new_repo_appends_a_card(monkeypatch):
     opened, upserted = _patch_common(monkeypatch, existing_projects_json="[]")
 
-    pr_url = portfolio_publisher.publish(
+    result = portfolio_publisher.publish(
         "owner/local-rag-cli", _PROFILE, _DECISION, _POST_PACKAGE, "delivery-1"
     )
 
-    assert pr_url == "https://github.com/owner/portfolio-demo/pull/7"
+    assert result == {"url": "https://github.com/owner/portfolio-demo/pull/7", "number": 7}
     projects = json.loads(opened["files"]["projects.json"])
     assert len(projects) == 1
     assert projects[0]["repo"] == "owner/local-rag-cli"
@@ -110,6 +110,10 @@ def test_missing_projects_json_defaults_to_empty_list(monkeypatch):
 
     projects = json.loads(opened["files"]["projects.json"])
     assert len(projects) == 1
+
+
+def test_parse_pr_number_handles_multi_digit_numbers():
+    assert portfolio_publisher._parse_pr_number("https://github.com/owner/repo/pull/142") == 142
 
 
 def test_detection_is_independent_of_decision_action(monkeypatch):

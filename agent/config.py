@@ -47,3 +47,10 @@ def check_vertex_ai_enabled() -> None:
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
 check_model_version(GEMINI_MODEL)
 check_vertex_ai_enabled()
+
+# Auto-merges the portfolio PR right after opening it, so the user's live
+# site updates with zero clicks. Default ON for the demo — this is the
+# opt-out gate, since (unlike everything else in this file) it changes the
+# user's LIVE site, not just this agent's own behavior. NOT added to
+# .env.example here (outside agent/'s lane) — flagged for the teammate.
+PORTFOLIO_AUTO_MERGE = os.environ.get("PORTFOLIO_AUTO_MERGE", "1").strip().lower() in ("1", "true")
