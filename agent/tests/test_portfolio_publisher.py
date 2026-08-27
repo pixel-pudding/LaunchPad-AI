@@ -42,6 +42,12 @@ _POST_PACKAGE = {"text": "t", "hashtags": ["python"], "image_url": "data:image/s
 
 def _patch_common(monkeypatch, existing_projects_json, existing_skills_json="[]"):
     monkeypatch.setenv("PORTFOLIO_REPO", "owner/portfolio-demo")
+    # config.get_portfolio_repo() checks Firestore config/portfolio first —
+    # without this, every test below would hit a REAL firestore.Client()
+    # (slow, and fails with no credentials in this sandbox). None here
+    # means "not configured in Firestore", falling through to the env var
+    # set above, matching this file's tests' original assumption.
+    monkeypatch.setattr(memory, "get_portfolio_config", lambda client=None: None)
 
     def fake_get_file(repo, path):
         if path == "projects.json":
@@ -74,7 +80,7 @@ def test_new_repo_appends_a_card(monkeypatch):
         "owner/local-rag-cli", _PROFILE, _DECISION, _POST_PACKAGE, "delivery-1"
     )
 
-    assert result == {"url": "https://github.com/owner/portfolio-demo/pull/7", "number": 7}
+    assert result == {"url": "https://github.com/owner/portfolio-demo/pull/7", "number": 7, "portfolio_repo": "owner/portfolio-demo"}
     projects = json.loads(opened["files"]["projects.json"])
     assert len(projects) == 1
     assert projects[0]["repo"] == "owner/local-rag-cli"
@@ -198,7 +204,7 @@ def test_skills_update_failure_preserves_card_and_pr(monkeypatch):
 
     result = portfolio_publisher.publish("owner/repo", _PROFILE, _DECISION, _POST_PACKAGE, "d")
 
-    assert result == {"url": "https://github.com/owner/portfolio-demo/pull/7", "number": 7}
+    assert result == {"url": "https://github.com/owner/portfolio-demo/pull/7", "number": 7, "portfolio_repo": "owner/portfolio-demo"}
     assert "skills.json" not in opened["files"]
     assert "projects.json" in opened["files"]
     assert json.loads(opened["files"]["projects.json"])[0]["repo"] == "owner/repo"
@@ -213,3 +219,51 @@ def test_display_case_uses_known_map_then_title_fallback():
     assert portfolio_publisher._display_case("python") == "Python"
     assert portfolio_publisher._display_case("sql") == "SQL"
     assert portfolio_publisher._display_case("go") == "Go"  # not in map -> .title() fallback
+
+
+def test_publish_returns_none_when_no_portfolio_configured(monkeypatch, caplog):
+    """No Firestore config/portfolio and no PORTFOLIO_REPO env — an
+    expected "not set up yet" state, not a failure: publish() returns None
+    (not raise), logged at INFO, and touches no GitHub API at all."""
+    monkeypatch.delenv("PORTFOLIO_REPO", raising=False)
+    monkeypatch.setattr(memory, "get_portfolio_config", lambda client=None: None)
+
+    def _fail_if_called(*args, **kwargs):
+        raise AssertionError("github_open_pr should never be called with no portfolio configured")
+
+    monkeypatch.setattr(portfolio_publisher, "github_open_pr", _fail_if_called)
+
+    import logging
+
+    with caplog.at_level(logging.INFO):
+        result = portfolio_publisher.publish(
+            "owner/repo", _PROFILE, _DECISION, _POST_PACKAGE, "d"
+        )
+
+    assert result is None
+    assert any(record.levelno == logging.INFO for record in caplog.records)
+    assert not any(record.levelno >= logging.ERROR for record in caplog.records)
+
+
+def test_publish_uses_firestore_configured_repo_over_env(monkeypatch):
+    """Firestore config/portfolio wins over PORTFOLIO_REPO env — the UI
+    choice, once made, takes priority over the deployment default."""
+    monkeypatch.setenv("PORTFOLIO_REPO", "owner/env-repo")
+    monkeypatch.setattr(
+        memory, "get_portfolio_config", lambda client=None: {"portfolio_repo": "owner/firestore-repo"}
+    )
+    monkeypatch.setattr(portfolio_publisher, "github_get_file", lambda repo, path: "[]")
+
+    opened: dict = {}
+
+    def fake_open_pr(repo, branch, title, body, files):
+        opened["repo"] = repo
+        return "https://github.com/owner/firestore-repo/pull/1"
+
+    monkeypatch.setattr(portfolio_publisher, "github_open_pr", fake_open_pr)
+    monkeypatch.setattr(memory, "upsert_project", lambda repo, data, client=None: None)
+
+    result = portfolio_publisher.publish("owner/repo", _PROFILE, _DECISION, _POST_PACKAGE, "d")
+
+    assert opened["repo"] == "owner/firestore-repo"
+    assert result["portfolio_repo"] == "owner/firestore-repo"

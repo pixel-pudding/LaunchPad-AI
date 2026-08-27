@@ -14,6 +14,10 @@ emulator is available (e.g. in CI, where [AG]'s infra already assumes it).
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
+from google.cloud import firestore
+
 from agent import memory
 
 
@@ -38,10 +42,18 @@ class _FakeDocumentRef:
         return _FakeDoc(self._store.get(self._doc_id))
 
     def set(self, data: dict, merge: bool = False) -> None:
+        # Mimic real Firestore's server-side resolution of the
+        # SERVER_TIMESTAMP sentinel, so tests can meaningfully assert the
+        # ISO-string conversion in memory.get_portfolio_config() actually
+        # runs against a real datetime, not the raw sentinel object.
+        resolved = {
+            k: (datetime.now(timezone.utc) if v is firestore.SERVER_TIMESTAMP else v)
+            for k, v in data.items()
+        }
         if merge and self._doc_id in self._store:
-            self._store[self._doc_id].update(data)
+            self._store[self._doc_id].update(resolved)
         else:
-            self._store[self._doc_id] = dict(data)
+            self._store[self._doc_id] = resolved
 
 
 class _FakeCollection:
@@ -106,6 +118,34 @@ def test_context_profile_defaults_to_empty_dict():
 def test_voice_profile_defaults_to_empty_dict():
     client = FakeFirestoreClient()
     assert memory.get_voice_profile(client=client) == {}
+
+
+def test_portfolio_config_defaults_to_none():
+    client = FakeFirestoreClient()
+    assert memory.get_portfolio_config(client=client) is None
+
+
+def test_portfolio_config_roundtrip_converts_ts_to_iso_string():
+    client = FakeFirestoreClient()
+    memory.set_portfolio_config("owner/portfolio-demo", True, client=client)
+
+    result = memory.get_portfolio_config(client=client)
+
+    assert result["portfolio_repo"] == "owner/portfolio-demo"
+    assert result["auto_merge"] is True
+    assert isinstance(result["ts"], str)
+    datetime.fromisoformat(result["ts"])  # doesn't raise -> genuinely ISO-formatted
+
+
+def test_portfolio_config_overwrite_replaces_previous_value():
+    client = FakeFirestoreClient()
+    memory.set_portfolio_config("owner/old-repo", True, client=client)
+    memory.set_portfolio_config("owner/new-repo", False, client=client)
+
+    result = memory.get_portfolio_config(client=client)
+
+    assert result["portfolio_repo"] == "owner/new-repo"
+    assert result["auto_merge"] is False
 
 
 def test_idempotency_roundtrip():
