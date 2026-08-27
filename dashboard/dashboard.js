@@ -104,7 +104,11 @@ async function connectPortfolioRepo() {
         await fetch("/api/portfolio-config", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ portfolio_repo: slug }),
+            body: JSON.stringify({ 
+                portfolio_repo: slug,
+                format: "arbitrary",
+                auto_merge: true
+            }),
         });
     } catch (e) {
         console.warn("Could not save portfolio config to server:", e);
