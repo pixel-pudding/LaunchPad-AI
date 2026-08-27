@@ -61,7 +61,7 @@ def test_api_repos_failure_returns_empty_list_and_error_not_500(monkeypatch):
 def test_portfolio_config_post_then_get_roundtrips(monkeypatch):
     saved: dict = {}
 
-    def fake_set(portfolio_repo, auto_merge, client=None):
+    def fake_set(portfolio_repo, auto_merge, format=None, client=None):
         saved["portfolio_repo"] = portfolio_repo
         saved["auto_merge"] = auto_merge
 
@@ -97,7 +97,7 @@ def test_portfolio_config_get_returns_null_when_never_configured(monkeypatch):
 
 
 def test_portfolio_config_post_failure_returns_ok_false_not_500(monkeypatch):
-    def _boom(portfolio_repo, auto_merge, client=None):
+    def _boom(portfolio_repo, auto_merge, format=None, client=None):
         raise RuntimeError("Firestore unavailable")
 
     monkeypatch.setattr(memory, "set_portfolio_config", _boom)

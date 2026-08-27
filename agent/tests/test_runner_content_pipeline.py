@@ -26,8 +26,12 @@ real bug found and fixed in this same change; auto-merge OFF never calls
 github_merge_pr and leaves the PR open; a merge failure leaves the open PR
 and post_package intact with merged=False; no portfolio configured (neither
 Firestore nor env) skips publishing gracefully with the post still
-succeeding; and a next_build_suggester failure leaves everything built
-before it (decision, post, PR, merge status) completely untouched.
+succeeding; a next_build_suggester failure leaves everything built before
+it (decision, post, PR, merge status) completely untouched; and — Tier 2's
+hard safety invariant — an arbitrary-mode PR (pr["mode"] != "convention")
+NEVER auto-merges even when auto_merge is on, and a Tier 2 exception
+degrades exactly like a convention-path one (post_package survives, the
+run still returns normally).
 """
 
 from __future__ import annotations
@@ -101,7 +105,8 @@ def _patch_happy_content_pipeline(monkeypatch, pr_number=1):
     monkeypatch.setattr(
         runner,
         "publish_to_portfolio",
-        lambda repo, profile, decision, post_package, delivery_id: {
+        lambda repo, profile, decision, post_package, delivery_id, tag: {
+            "mode": "convention",
             "url": f"https://github.com/owner/portfolio-demo/pull/{pr_number}",
             "number": pr_number,
             "portfolio_repo": "owner/portfolio-demo",
@@ -152,7 +157,7 @@ def test_skip_runs_none_of_the_content_publishing_or_suggestion_pipeline(monkeyp
     monkeypatch.setattr(
         runner,
         "publish_to_portfolio",
-        lambda *a, **k: called.__setitem__("portfolio_publisher", True) or {"url": "", "number": 1, "portfolio_repo": ""},
+        lambda *a, **k: called.__setitem__("portfolio_publisher", True) or {"mode": "convention", "url": "", "number": 1, "portfolio_repo": ""},
     )
     monkeypatch.setattr(
         runner,
@@ -309,7 +314,7 @@ def test_content_writer_failure_degrades_to_no_post_package_but_publisher_still_
     monkeypatch.setattr(
         runner,
         "publish_to_portfolio",
-        lambda *a, **k: {"url": "https://github.com/owner/portfolio-demo/pull/4", "number": 4, "portfolio_repo": "owner/portfolio-demo"},
+        lambda *a, **k: {"mode": "convention", "url": "https://github.com/owner/portfolio-demo/pull/4", "number": 4, "portfolio_repo": "owner/portfolio-demo"},
     )
     monkeypatch.setattr(runner, "github_merge_pr", lambda repo, pr_number: {"merged": True, "sha": "s"})
     monkeypatch.setattr(runner, "suggest_next_builds", lambda *a, **k: [])
@@ -351,7 +356,7 @@ def test_image_tool_failure_still_produces_post_package_without_image(monkeypatc
     monkeypatch.setattr(
         runner,
         "publish_to_portfolio",
-        lambda *a, **k: {"url": "https://github.com/owner/portfolio-demo/pull/5", "number": 5, "portfolio_repo": "owner/portfolio-demo"},
+        lambda *a, **k: {"mode": "convention", "url": "https://github.com/owner/portfolio-demo/pull/5", "number": 5, "portfolio_repo": "owner/portfolio-demo"},
     )
     monkeypatch.setattr(runner, "github_merge_pr", lambda repo, pr_number: {"merged": True, "sha": "s"})
     monkeypatch.setattr(runner, "suggest_next_builds", lambda *a, **k: [])
@@ -385,7 +390,7 @@ def test_self_reviewer_failure_keeps_the_unreviewed_post_package(monkeypatch):
     monkeypatch.setattr(
         runner,
         "publish_to_portfolio",
-        lambda *a, **k: {"url": "https://github.com/owner/portfolio-demo/pull/6", "number": 6, "portfolio_repo": "owner/portfolio-demo"},
+        lambda *a, **k: {"mode": "convention", "url": "https://github.com/owner/portfolio-demo/pull/6", "number": 6, "portfolio_repo": "owner/portfolio-demo"},
     )
     monkeypatch.setattr(runner, "github_merge_pr", lambda repo, pr_number: {"merged": True, "sha": "s"})
     monkeypatch.setattr(runner, "suggest_next_builds", lambda *a, **k: [])
@@ -463,7 +468,7 @@ def test_next_build_suggester_failure_preserves_everything_else(monkeypatch):
     monkeypatch.setattr(
         runner,
         "publish_to_portfolio",
-        lambda *a, **k: {"url": "https://github.com/owner/portfolio-demo/pull/9", "number": 9, "portfolio_repo": "owner/portfolio-demo"},
+        lambda *a, **k: {"mode": "convention", "url": "https://github.com/owner/portfolio-demo/pull/9", "number": 9, "portfolio_repo": "owner/portfolio-demo"},
     )
     monkeypatch.setattr(runner, "github_merge_pr", lambda repo, pr_number: {"merged": True, "sha": "final-sha"})
 
@@ -488,3 +493,98 @@ def test_next_build_suggester_failure_preserves_everything_else(monkeypatch):
     assert result["self_review"] == {"passed": True, "issues": [], "revised": False}
     # And the Firestore-bound record matches exactly what was returned.
     assert saved["record"]["artifacts"] == result["artifacts"]
+
+
+def test_arbitrary_mode_never_auto_merges_even_with_auto_merge_true(monkeypatch):
+    """Tier 2 hard safety invariant #2: an arbitrary-repo PR (this run
+    returns "arbitrary_high") must NEVER be auto-merged, regardless of
+    config.get_portfolio_auto_merge() — github_merge_pr must not even be
+    called."""
+    _patch_memory(monkeypatch)
+    monkeypatch.setattr(runner, "analyze_release", lambda event: dict(_PROFILE))
+    monkeypatch.setattr(runner, "curate", lambda profile, memory_context, delivery_id=None: dict(_FEATURE_NEW_DECISION))
+    monkeypatch.setattr(config, "PORTFOLIO_AUTO_MERGE", True)
+    monkeypatch.setattr(
+        runner,
+        "write_content",
+        lambda profile, decision, voice_profile: {
+            "text": "Shipped a thing.",
+            "hashtags": ["python"],
+            "image_prompt": "a diagram",
+        },
+    )
+    monkeypatch.setattr(runner, "generate_image", lambda prompt: "data:x")
+    monkeypatch.setattr(
+        runner,
+        "run_self_review",
+        lambda post_package, profile, decision, voice_profile: (post_package, {"passed": True, "issues": [], "revised": False}),
+    )
+    monkeypatch.setattr(
+        runner,
+        "publish_to_portfolio",
+        lambda *a, **k: {
+            "mode": "arbitrary_high",
+            "url": "https://github.com/owner/portfolio-demo/pull/10",
+            "number": 10,
+            "portfolio_repo": "owner/portfolio-demo",
+            "auto_merge_suppressed": True,
+        },
+    )
+    merge_called = {"value": False}
+    monkeypatch.setattr(
+        runner, "github_merge_pr", lambda *a, **k: merge_called.__setitem__("value", True) or {"merged": True, "sha": "x"}
+    )
+    monkeypatch.setattr(runner, "suggest_next_builds", lambda *a, **k: [])
+
+    result = runner.run_agent({"delivery_id": "d11", "repo": "owner/repo", "tag": "v1.0"})
+
+    assert merge_called["value"] is False  # never even attempted
+    assert result["artifacts"]["portfolio_pr"] == "https://github.com/owner/portfolio-demo/pull/10"
+    assert result["artifacts"]["portfolio_mode"] == "arbitrary_high"
+    assert result["artifacts"]["portfolio_pr_merged"] is False
+    assert "portfolio_pr_sha" not in result["artifacts"]
+
+
+def test_tier2_exception_preserves_post_package_and_returns_normally(monkeypatch):
+    """A Tier 2 failure (structure detection or format-matched generation
+    raising) reaches runner.py through the exact same publish_to_portfolio
+    exception path as a convention-path failure — post_package must
+    survive and the run must complete normally (no 500, no crash)."""
+    _patch_memory(monkeypatch)
+    monkeypatch.setattr(runner, "analyze_release", lambda event: dict(_PROFILE))
+    monkeypatch.setattr(runner, "curate", lambda profile, memory_context, delivery_id=None: dict(_FEATURE_NEW_DECISION))
+    monkeypatch.setattr(
+        runner,
+        "write_content",
+        lambda profile, decision, voice_profile: {
+            "text": "Shipped a thing.",
+            "hashtags": ["python"],
+            "image_prompt": "a diagram",
+        },
+    )
+    monkeypatch.setattr(runner, "generate_image", lambda prompt: "data:x")
+    monkeypatch.setattr(
+        runner,
+        "run_self_review",
+        lambda post_package, profile, decision, voice_profile: (post_package, {"passed": True, "issues": [], "revised": False}),
+    )
+
+    def _boom(*a, **k):
+        raise RuntimeError("Tier 2 structure detection exploded")
+
+    monkeypatch.setattr(runner, "publish_to_portfolio", _boom)
+    merge_called = {"value": False}
+    monkeypatch.setattr(runner, "github_merge_pr", lambda *a, **k: merge_called.__setitem__("value", True) or {})
+    monkeypatch.setattr(runner, "suggest_next_builds", lambda *a, **k: [])
+
+    result = runner.run_agent({"delivery_id": "d12", "repo": "owner/repo", "tag": "v1.0"})
+
+    assert result["action"] == "feature_new"  # the run completed normally, no crash
+    assert result["artifacts"]["post_package"] == {
+        "text": "Shipped a thing.",
+        "hashtags": ["python"],
+        "image_url": "data:x",
+    }
+    assert "portfolio_pr" not in result["artifacts"]
+    assert "portfolio_mode" not in result["artifacts"]
+    assert merge_called["value"] is False

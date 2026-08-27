@@ -126,6 +126,57 @@ def test_github_merge_pr_returns_merged_and_sha_on_success(monkeypatch):
     assert result == {"merged": True, "sha": "abc123"}
 
 
+def test_github_list_repo_shallow_lists_root_and_one_level_deep(monkeypatch):
+    monkeypatch.setattr(github_tool, "_auth_headers", lambda: {})
+
+    def fake_get(url, headers=None, timeout=None):
+        if url.endswith("/contents"):
+            return _FakeResponse(
+                json_data=[
+                    {"type": "file", "name": "README.md", "path": "README.md"},
+                    {"type": "file", "name": "package.json", "path": "package.json"},
+                    {"type": "file", "name": "logo.png", "path": "logo.png"},  # not relevant
+                    {"type": "dir", "name": "src", "path": "src"},
+                    {"type": "dir", "name": ".git", "path": ".git"},  # skipped (dotdir)
+                ]
+            )
+        if url.endswith("/contents/src"):
+            return _FakeResponse(
+                json_data=[
+                    {"type": "file", "name": "projects.jsx", "path": "src/projects.jsx"},
+                    {"type": "file", "name": "styles.css", "path": "src/styles.css"},  # not relevant
+                ]
+            )
+        raise AssertionError(f"unexpected GET {url}")
+
+    monkeypatch.setattr(github_tool.requests, "get", fake_get)
+
+    result = github_tool.github_list_repo_shallow("owner/repo")
+
+    assert set(result) == {"README.md", "package.json", "src/projects.jsx"}
+
+
+def test_github_list_repo_shallow_respects_max_files_cap(monkeypatch):
+    monkeypatch.setattr(github_tool, "_auth_headers", lambda: {})
+    root_items = [{"type": "file", "name": f"file{i}.json", "path": f"file{i}.json"} for i in range(10)]
+    monkeypatch.setattr(
+        github_tool.requests, "get", lambda url, headers=None, timeout=None: _FakeResponse(json_data=root_items)
+    )
+
+    result = github_tool.github_list_repo_shallow("owner/repo", max_files=3)
+
+    assert len(result) == 3
+
+
+def test_github_list_repo_shallow_returns_empty_on_404(monkeypatch):
+    monkeypatch.setattr(github_tool, "_auth_headers", lambda: {})
+    monkeypatch.setattr(
+        github_tool.requests, "get", lambda url, headers=None, timeout=None: _FakeResponse(status_code=404)
+    )
+
+    assert github_tool.github_list_repo_shallow("owner/repo") == []
+
+
 def test_github_merge_pr_raises_on_failure(monkeypatch):
     """Not mergeable / branch protection / permissions all surface as an
     HTTP error status — raise_for_status() must actually raise, not swallow
