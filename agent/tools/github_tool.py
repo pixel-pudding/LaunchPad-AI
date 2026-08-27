@@ -165,6 +165,7 @@ def github_get_repo(repo: str) -> dict[str, Any]:
     return {
         "name": repo_data.get("name", repo),
         "description": repo_data.get("description") or "",
+        "homepage": repo_data.get("homepage") or "",
         "readme": readme_text,
         "langs": langs,
         "tree": tree,

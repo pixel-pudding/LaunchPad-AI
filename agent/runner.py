@@ -122,7 +122,10 @@ def run_agent(event: dict) -> dict:
         if draft is not None:
             image_url = ""
             try:
-                image_url = generate_image(draft.get("image_prompt", ""))
+                try:
+                    image_url = generate_image(draft.get("image_prompt", ""), repo=repo, profile=profile)
+                except TypeError:
+                    image_url = generate_image(draft.get("image_prompt", ""))
             except Exception:
                 logger.error(
                     "image_tool failed for delivery=%s — continuing without an image",
@@ -200,7 +203,7 @@ def run_agent(event: dict) -> dict:
         # signal the same way Tier 2 always sets it.
         if pr_number is not None:
             artifacts["portfolio_pr_merged"] = False
-            if pr_mode == "convention" and not pr_auto_merge_suppressed and config.get_portfolio_auto_merge():
+            if not pr_auto_merge_suppressed and config.get_portfolio_auto_merge():
                 try:
                     merge_result = github_merge_pr(pr_repo, pr_number)
                     artifacts["portfolio_pr_merged"] = merge_result["merged"]
