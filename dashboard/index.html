@@ -1,15 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LaunchPad AI — Autonomous Career Agent</title>
-    <meta name="description" content="LaunchPad AI is an autonomous career agent that watches GitHub releases, curates career impact, drafts LinkedIn post packages, and updates portfolio repositories hands-free.">
+    <meta name="description"
+        content="LaunchPad AI is an autonomous career agent that watches GitHub releases, curates career impact, drafts LinkedIn post packages, and updates portfolio repositories hands-free.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="/static/dashboard.css?v=15">
 </head>
+
 <body>
 
     <!-- ── Sticky Header & Navigation ──────────────────────── -->
@@ -51,35 +56,40 @@
         <div class="observability-strip">
             <span class="obs-tag font-mono-lp">SYSTEM</span>
             <div class="obs-items">
-                <a href="https://console.cloud.google.com/run/detail/asia-south1/launchpad-ai?project=launchpad-ai-506616" target="_blank" rel="noopener" class="obs-item" title="Cloud Run Service Console">
+                <a href="https://console.cloud.google.com/run/detail/asia-south1/launchpad-ai?project=launchpad-ai-506616"
+                    target="_blank" rel="noopener" class="obs-item" title="Cloud Run Service Console">
                     <span class="dot-indicator"></span>
                     <div class="obs-text">
                         <span class="obs-label font-mono-lp">CLOUD RUN</span>
                         <span class="obs-val font-mono-lp">HEALTHY</span>
                     </div>
                 </a>
-                <a href="https://console.cloud.google.com/firestore/databases/-default-/data/panel?project=launchpad-ai-506616" target="_blank" rel="noopener" class="obs-item" title="Firestore Database Memory">
+                <a href="https://console.cloud.google.com/firestore/databases/-default-/data/panel?project=launchpad-ai-506616"
+                    target="_blank" rel="noopener" class="obs-item" title="Firestore Database Memory">
                     <span class="dot-indicator"></span>
                     <div class="obs-text">
                         <span class="obs-label font-mono-lp">FIRESTORE</span>
                         <span class="obs-val font-mono-lp">MEMORY ACTIVE</span>
                     </div>
                 </a>
-                <a href="https://console.cloud.google.com/cloudpubsub/topic/detail/launchpad-ai-events?project=launchpad-ai-506616" target="_blank" rel="noopener" class="obs-item" title="Pub/Sub Events Queue">
+                <a href="https://console.cloud.google.com/cloudpubsub/topic/detail/launchpad-ai-events?project=launchpad-ai-506616"
+                    target="_blank" rel="noopener" class="obs-item" title="Pub/Sub Events Queue">
                     <span class="dot-indicator"></span>
                     <div class="obs-text">
                         <span class="obs-label font-mono-lp">PUB/SUB</span>
                         <span class="obs-val font-mono-lp">CONNECTED</span>
                     </div>
                 </a>
-                <a href="https://console.cloud.google.com/traces/list?project=launchpad-ai-506616" target="_blank" rel="noopener" class="obs-item" title="Google Cloud Trace">
+                <a href="https://console.cloud.google.com/traces/list?project=launchpad-ai-506616" target="_blank"
+                    rel="noopener" class="obs-item" title="Google Cloud Trace">
                     <span class="dot-indicator"></span>
                     <div class="obs-text">
                         <span class="obs-label font-mono-lp">CLOUD TRACE</span>
                         <span class="obs-val font-mono-lp">ACTIVE</span>
                     </div>
                 </a>
-                <a href="https://console.cloud.google.com/logs/query;query=resource.type%3D%22cloud_run_revision%22%20resource.labels.service_name%3D%22launchpad-ai%22?project=launchpad-ai-506616" target="_blank" rel="noopener" class="obs-item" title="Cloud Run Logs Explorer">
+                <a href="https://console.cloud.google.com/logs/query;query=resource.type%3D%22cloud_run_revision%22%20resource.labels.service_name%3D%22launchpad-ai%22?project=launchpad-ai-506616"
+                    target="_blank" rel="noopener" class="obs-item" title="Cloud Run Logs Explorer">
                     <span class="dot-indicator"></span>
                     <div class="obs-text">
                         <span class="obs-label font-mono-lp">LOGS EXPLORER</span>
@@ -122,13 +132,16 @@
                         Your career, quietly managed on every GitHub release.
                     </h1>
                     <p class="hero-desc">
-                        Ship a release, walk away. LaunchPad AI's autonomous curator evaluates your work against your career context, generates LinkedIn announcements, and updates your portfolio with auto-merged pull requests.
+                        Ship a release, walk away. LaunchPad AI's autonomous curator evaluates your work against your
+                        career context, generates LinkedIn announcements, and updates your portfolio with auto-merged
+                        pull requests.
                     </p>
                     <div class="hero-actions">
                         <button class="btn btn-primary" onclick="switchTab('dashboard')">
                             Open Live Dashboard →
                         </button>
-                        <a href="https://github.com/apps/launchpad-ai-agent" target="_blank" rel="noopener" class="btn btn-secondary">
+                        <a href="https://github.com/apps/launchpad-ai-agent" target="_blank" rel="noopener"
+                            class="btn btn-secondary">
                             Install GitHub App ↗
                         </a>
                     </div>
@@ -161,27 +174,32 @@
                             <div class="terminal-step">
                                 <span class="term-sym">›</span>
                                 <span class="term-label">profile bootstrapping</span>
-                                <span class="term-val font-mono-lp" style="color: var(--accent-sage);">synthesized from github</span>
+                                <span class="term-val font-mono-lp" style="color: var(--accent-sage);">synthesized from
+                                    github</span>
                             </div>
                             <div class="terminal-step">
                                 <span class="term-sym">›</span>
                                 <span class="term-label">evaluating career impact</span>
-                                <span class="term-val font-mono-lp" style="color: var(--accent-sage);">decision: feature_new</span>
+                                <span class="term-val font-mono-lp" style="color: var(--accent-sage);">decision:
+                                    feature_new</span>
                             </div>
                             <div class="terminal-step">
                                 <span class="term-sym">›</span>
                                 <span class="term-label">updating projects.json</span>
-                                <span class="term-val font-mono-lp" style="color: var(--accent-sage);">PR #1 opened & merged</span>
+                                <span class="term-val font-mono-lp" style="color: var(--accent-sage);">PR #1 opened &
+                                    merged</span>
                             </div>
                             <div class="terminal-step">
                                 <span class="term-sym">›</span>
                                 <span class="term-label">adding tech stack skills</span>
-                                <span class="term-val font-mono-lp" style="color: var(--accent-sage);">FastAPI, Vertex AI, RAG</span>
+                                <span class="term-val font-mono-lp" style="color: var(--accent-sage);">FastAPI, Vertex
+                                    AI, RAG</span>
                             </div>
                             <div class="terminal-step">
                                 <span class="term-sym">›</span>
                                 <span class="term-label">drafting linkedin package</span>
-                                <span class="term-val font-mono-lp" style="color: var(--accent-amber);">ready for review</span>
+                                <span class="term-val font-mono-lp" style="color: var(--accent-amber);">ready for
+                                    review</span>
                             </div>
                             <div class="terminal-divider"></div>
                             <div class="terminal-footer">
@@ -209,10 +227,12 @@
                         <div class="step-num font-mono-lp">01</div>
                         <h3 class="connect-title">Install the GitHub App</h3>
                         <p class="connect-desc">
-                            Install on your personal account or organization. LaunchPad AI only requests permissions to read repository metadata/releases and open pull requests.
+                            Install on your personal account or organization. LaunchPad AI only requests permissions to
+                            read repository metadata/releases and open pull requests.
                         </p>
                         <div class="connect-action">
-                            <a href="https://github.com/apps/launchpad-ai-agent" target="_blank" rel="noopener" class="btn btn-connect">
+                            <a href="https://github.com/apps/launchpad-ai-agent" target="_blank" rel="noopener"
+                                class="btn btn-connect">
                                 Install on GitHub ↗
                             </a>
                             <span class="connect-hint font-mono-lp">app id: 4721900</span>
@@ -224,11 +244,28 @@
                         <div class="step-num font-mono-lp">02</div>
                         <h3 class="connect-title">Target Portfolio Repository</h3>
                         <p class="connect-desc">
-                            Connect your portfolio repo. The agent creates and updates <code>projects.json</code> and <code>skills.json</code> so your website renders new releases automatically.
+                            Connect your portfolio repo. The agent creates and updates <code>projects.json</code> and
+                            <code>skills.json</code> so your website renders new releases automatically.
                         </p>
-                        <div class="target-repo-box">
-                            <span class="font-mono-lp" id="portfolio-target-name">pixel-pudding/portfolio-demo</span>
-                            <span class="badge-pill font-mono-lp" style="color: var(--accent-sage); background: var(--sage-bg); border-color: var(--sage-border);">CONNECTED</span>
+                        <div class="target-repo-box" id="target-repo-box">
+                            <div class="repo-input-wrapper" id="repo-input-wrapper">
+                                <input 
+                                    type="text" 
+                                    class="repo-input font-mono-lp" 
+                                    id="portfolio-repo-input" 
+                                    placeholder="e.g. username/portfolio or GitHub URL"
+                                />
+                                <button class="btn btn-connect-action font-mono-lp" onclick="connectPortfolioRepo()">
+                                    Connect
+                                </button>
+                            </div>
+                            <div class="repo-connected-state" id="repo-connected-state" style="display:none;">
+                                <span class="font-mono-lp repo-name-display" id="portfolio-target-name"></span>
+                                <div class="repo-action-group">
+                                    <span class="badge-pill font-mono-lp" style="color: var(--accent-sage); background: var(--sage-bg); border-color: var(--sage-border);">CONNECTED</span>
+                                    <button class="btn-edit-target font-mono-lp" onclick="editPortfolioRepo()" title="Change portfolio repository">Edit</button>
+                                </div>
+                            </div>
                         </div>
                         <div class="connect-note">
                             <span class="font-mono-lp note-badge">NOTE</span>
@@ -253,17 +290,20 @@
                     <div class="flow-step-card">
                         <div class="flow-num font-mono-lp">02</div>
                         <h4>Agent evaluates</h4>
-                        <p>Gemini 3.5 analyzes release notes and decides: <code>feature_new</code>, <code>update_existing</code>, or <code>skip</code>.</p>
+                        <p>Gemini 3.5 analyzes release notes and decides: <code>feature_new</code>,
+                            <code>update_existing</code>, or <code>skip</code>.</p>
                     </div>
                     <div class="flow-step-card">
                         <div class="flow-num font-mono-lp">03</div>
                         <h4>Portfolio PR opened</h4>
-                        <p>Writes <code>projects.json</code> and updates <code>skills.json</code>, opening a PR that auto-merges hands-free.</p>
+                        <p>Writes <code>projects.json</code> and updates <code>skills.json</code>, opening a PR that
+                            auto-merges hands-free.</p>
                     </div>
                     <div class="flow-step-card accent-card">
                         <div class="flow-num font-mono-lp">04</div>
                         <h4>Post drafted for you</h4>
-                        <p>A structured LinkedIn draft lands on your dashboard. One click copies the post and opens LinkedIn.</p>
+                        <p>A structured LinkedIn draft lands on your dashboard. One click copies the post and opens
+                            LinkedIn.</p>
                     </div>
                 </div>
 
@@ -273,8 +313,10 @@
                     <span class="control-divider"></span>
                     <span class="control-text">Nothing is published under your name without your approval.</span>
                     <span class="control-divider"></span>
-                    <span class="font-mono-lp control-item" style="color: var(--accent-sage);">✓ Portfolio PRs auto-merge</span>
-                    <span class="font-mono-lp control-item" style="color: var(--accent-amber);">⟳ Posts need your review</span>
+                    <span class="font-mono-lp control-item" style="color: var(--accent-sage);">✓ Portfolio PRs
+                        auto-merge</span>
+                    <span class="font-mono-lp control-item" style="color: var(--accent-amber);">⟳ Posts need your
+                        review</span>
                 </div>
             </section>
 
@@ -335,7 +377,8 @@
                         <div class="sidebar-card-header">
                             <div class="card-title-group">
                                 <span class="font-mono-lp card-kicker">LATEST POST DRAFT</span>
-                                <span class="decision-badge font-mono-lp" id="post-action-badge" style="display:none;">READY</span>
+                                <span class="decision-badge font-mono-lp" id="post-action-badge"
+                                    style="display:none;">READY</span>
                             </div>
                             <span class="font-mono-lp post-repo-name" id="post-repo"></span>
                         </div>
@@ -428,4 +471,5 @@
 
     <script src="/static/dashboard.js?v=15"></script>
 </body>
+
 </html>
