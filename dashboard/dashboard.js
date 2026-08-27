@@ -58,8 +58,21 @@ function parseRepoSlug(input) {
     return clean;
 }
 
-function loadConnectedPortfolioRepo() {
-    const saved = localStorage.getItem("launchpad_portfolio_repo");
+async function loadConnectedPortfolioRepo() {
+    let saved = localStorage.getItem("launchpad_portfolio_repo");
+    try {
+        const resp = await fetch("/api/portfolio-config");
+        if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.portfolio_repo) {
+                saved = data.portfolio_repo;
+                localStorage.setItem("launchpad_portfolio_repo", saved);
+            }
+        }
+    } catch (e) {
+        console.warn("Could not fetch portfolio config from server:", e);
+    }
+
     const inputWrapper = document.getElementById("repo-input-wrapper");
     const connectedState = document.getElementById("repo-connected-state");
     const nameDisplay = document.getElementById("portfolio-target-name");
@@ -77,7 +90,7 @@ function loadConnectedPortfolioRepo() {
     }
 }
 
-function connectPortfolioRepo() {
+async function connectPortfolioRepo() {
     const inputEl = document.getElementById("portfolio-repo-input");
     if (!inputEl) return;
     const slug = parseRepoSlug(inputEl.value);
@@ -85,6 +98,16 @@ function connectPortfolioRepo() {
     if (!slug || !slug.includes("/")) {
         showToast("Please enter a valid repo (e.g. username/portfolio or GitHub URL)");
         return;
+    }
+
+    try {
+        await fetch("/api/portfolio-config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ portfolio_repo: slug }),
+        });
+    } catch (e) {
+        console.warn("Could not save portfolio config to server:", e);
     }
 
     localStorage.setItem("launchpad_portfolio_repo", slug);
