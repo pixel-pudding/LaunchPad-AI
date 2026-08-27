@@ -70,6 +70,12 @@ def run_agent(event: dict) -> dict:
         delivery_id,
     )
 
+    # Auto-bootstrap profile from GitHub if missing (before curator runs,
+    # because the curator consumes context/profile).
+    from agent.subagents.profile_bootstrapper import ensure_profile
+
+    ensure_profile(event)
+
     profile = analyze_release(event)
 
     memory_context = {
