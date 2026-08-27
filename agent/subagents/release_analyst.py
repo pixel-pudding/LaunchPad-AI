@@ -27,6 +27,9 @@ def analyze_release(event: dict[str, Any]) -> dict[str, Any]:
     return build_profile(repo_data)
 
 
+import re
+
+
 def build_profile(repo_data: dict[str, Any]) -> dict[str, Any]:
     """Pure mapping from raw github_get_repo() output to the profile shape."""
     langs = repo_data.get("langs", [])
@@ -35,11 +38,27 @@ def build_profile(repo_data: dict[str, Any]) -> dict[str, Any]:
     return {
         "name": repo_data.get("name", ""),
         "summary": _derive_summary(repo_data),
+        "demo_url": _derive_demo_url(repo_data),
         "stack": [lang.lower() for lang in langs],
         "skill_tags": _derive_skill_tags(langs, tree),
         "readme": repo_data.get("readme", ""),
         "images": repo_data.get("images", []),
     }
+
+
+def _derive_demo_url(repo_data: dict[str, Any]) -> str:
+    homepage = repo_data.get("homepage", "")
+    if homepage and homepage.startswith("http"):
+        return homepage.strip()
+    readme = repo_data.get("readme", "")
+    match = re.search(
+        r"(?:live demo|demo|live site|deployment|app|website|live|preview):\s*(https?://[^\s)\]]+)",
+        readme,
+        re.IGNORECASE,
+    )
+    if match:
+        return match.group(1).strip()
+    return ""
 
 
 def _derive_summary(repo_data: dict[str, Any]) -> str:

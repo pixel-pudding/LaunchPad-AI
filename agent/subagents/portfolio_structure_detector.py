@@ -61,12 +61,12 @@ Return ONLY structured output matching the schema.
 """
 
 _EDIT_INSTRUCTION = """\
-You are editing a portfolio site file to add ONE new project entry, in \
-this file's OWN existing format — do not change the file's structure, \
-styling, other entries, or anything unrelated. Match the exact conventions \
-(quoting, indentation, field names) already used in the file. Return the \
-COMPLETE new file content, not a diff or a snippet.
-
+You are an expert web developer adding ONE new project entry to an existing portfolio codebase. \
+Generate ONLY the new project entry (entry_snippet) in this file's OWN existing format (HTML card, React JSX component, or JavaScript/JSON object). \
+Do NOT rewrite the whole file. \
+Also specify target_anchor: an exact 1-2 line string from the existing file right AFTER which this new entry should be inserted (such as the closing tag or brace of the preceding project card or array item). \
+If new_project.demo_url is provided and non-empty, include a Live Demo link alongside the GitHub repo link matching the style of existing cards with demo links. If demo_url is empty, only render the GitHub link. \
+If new_project.image_url is provided, use it directly as the image src in <img src="..." />. \
 Return ONLY structured output matching the schema.
 """
 
@@ -84,7 +84,9 @@ class StructureDetection(BaseModel):
 
 
 class FormatMatchedEdit(BaseModel):
-    file_content: str
+    entry_snippet: str = ""
+    target_anchor: str = ""
+    file_content: str = ""
 
 
 def _pick_candidate_files_for_content(listing: list[str], limit: int) -> list[str]:
@@ -181,6 +183,7 @@ def _build_edit_prompt(
             "stack": profile.get("stack"),
             "positioning": decision.get("positioning"),
             "image_url": post_package.get("image_url"),
+            "demo_url": profile.get("demo_url"),
             "url": f"https://github.com/{repo}",
         },
     }
@@ -210,6 +213,47 @@ def _call_gemini_for_edit(prompt: str) -> FormatMatchedEdit:
     return parsed
 
 
+def _splice_snippet(
+    current_content: str, snippet: str, anchor: str = "", format_type: str = ""
+) -> str:
+    """Deterministically inserts `snippet` into `current_content` without
+    rewriting or altering any other part of the file.
+    """
+    snippet = snippet.strip()
+    if not snippet:
+        return current_content
+
+    # 1. Exact anchor match
+    if anchor and anchor.strip() in current_content:
+        anchor_clean = anchor.strip()
+        idx = current_content.find(anchor_clean) + len(anchor_clean)
+        return current_content[:idx] + "\n\n" + snippet + current_content[idx:]
+
+    # 2. HTML format fallback: find closing of last project-card or container
+    if format_type == "html_cards" or "<div" in snippet or "<section" in current_content:
+        markers = [
+            "</div>\n                <div class=\"project-card-bar\"></div>\n            </div>",
+            "</div>\n            </div>",
+            "</section>",
+        ]
+        for marker in markers:
+            if marker in current_content:
+                last_idx = current_content.rfind(marker) + len(marker)
+                return current_content[:last_idx] + "\n\n" + snippet + current_content[last_idx:]
+
+    # 3. JSON/TS array fallback: find last '];' or ']'
+    if "];" in current_content:
+        idx = current_content.rfind("];")
+        return current_content[:idx].rstrip().rstrip(",") + ",\n  " + snippet + "\n];" + current_content[idx + 2 :]
+
+    if "]" in current_content:
+        idx = current_content.rfind("]")
+        return current_content[:idx].rstrip().rstrip(",") + ",\n  " + snippet + "\n]" + current_content[idx + 1 :]
+
+    # 4. End of file fallback
+    return current_content + "\n\n" + snippet
+
+
 def generate_format_matched_file(
     portfolio_repo: str,
     location: dict[str, Any],
@@ -219,11 +263,18 @@ def generate_format_matched_file(
     repo: str,
 ) -> str:
     """Returns the FULL edited content for location['file_path'], with a new
-    project entry added per location['insertion_notes']. Only reads from
-    GitHub itself (github_get_file) — portfolio_publisher.py is what
-    actually writes the result, via github_open_pr. May raise.
+    project entry spliced deterministically per location['insertion_notes'].
     """
     current_content = github_get_file(portfolio_repo, location["file_path"]) or ""
     prompt = _build_edit_prompt(current_content, location, profile, decision, post_package, repo)
     result = _call_gemini_for_edit(prompt)
-    return result.file_content
+
+    if result.entry_snippet:
+        return _splice_snippet(
+            current_content,
+            result.entry_snippet,
+            anchor=result.target_anchor,
+            format_type=location.get("format", ""),
+        )
+
+    return result.file_content or current_content
