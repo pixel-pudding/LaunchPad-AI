@@ -49,12 +49,16 @@ def run_agent(event: dict) -> dict:
     a post_package exists to review) -> portfolio_publisher (runs
     regardless of whether the post pipeline succeeded — the portfolio card
     is an independent artifact; returns None, not an error, if no portfolio
-    repo is configured yet via config.get_portfolio_repo()) -> auto-merge
-    the PR just opened, on the repo it was actually opened on (own
-    try/except, gated by config.get_portfolio_auto_merge(); a merge failure
-    leaves the PR open rather than losing it) -> next_build_suggester (a
-    pure, secondary byproduct — reads only already-fetched memory, writes
-    only its own artifacts key, never influences the decision/post/PR),
+    repo is configured yet via config.get_portfolio_repo(); internally picks
+    the convention path (root projects.json) or the Tier 2 arbitrary-repo
+    path — see portfolio_publisher.py — and reports which one ran via
+    pr["mode"]) -> auto-merge the PR just opened, on the repo it was
+    actually opened on, ONLY if pr["mode"] == "convention" (own try/except,
+    gated by config.get_portfolio_auto_merge(); Tier 2 PRs never auto-merge
+    regardless of that setting, and a merge failure leaves the PR open
+    rather than losing it) -> next_build_suggester (a pure, secondary
+    byproduct — reads only already-fetched memory, writes only its own
+    artifacts key, never influences the decision/post/PR),
     each failing gracefully: log and continue/skip rather than crash the
     webhook] -> save decision -> mark processed -> return.
     """
@@ -150,17 +154,25 @@ def run_agent(event: dict) -> dict:
 
         pr_number = None
         pr_repo = None
+        pr_mode = None
+        pr_auto_merge_suppressed = False
         try:
             pr = publish_to_portfolio(
-                repo, profile, decision, artifacts.get("post_package", {}), delivery_id
+                repo, profile, decision, artifacts.get("post_package", {}), delivery_id, event.get("tag", "")
             )
             # publish() returns None (not an exception) when no portfolio
             # repo is configured yet — an expected state, already logged
             # at INFO inside portfolio_publisher. Nothing to merge either.
+            # This covers BOTH paths inside publish() (convention and Tier
+            # 2 arbitrary) — a failure or a None in either one is handled
+            # identically here; pr["mode"] is what tells them apart below.
             if pr is not None:
                 artifacts["portfolio_pr"] = pr["url"]
+                artifacts["portfolio_mode"] = pr["mode"]
                 pr_number = pr["number"]
                 pr_repo = pr["portfolio_repo"]
+                pr_mode = pr["mode"]
+                pr_auto_merge_suppressed = pr.get("auto_merge_suppressed", False)
         except Exception:
             logger.error(
                 "portfolio_publisher failed for delivery=%s — post package (if any) is unaffected",
@@ -176,9 +188,19 @@ def run_agent(event: dict) -> dict:
         # actually opened on (pr_repo — the portfolio repo, NOT `repo`,
         # which is the source release repo the webhook fired for) —
         # never looks up or touches any other PR.
+        #
+        # HARD INVARIANT: Tier 2 arbitrary-repo PRs (pr_mode in
+        # "arbitrary_high"/"arbitrary_low") NEVER auto-merge, regardless of
+        # config.get_portfolio_auto_merge() — they either edit unreviewed
+        # site code or drop content nobody's placed yet, and always need a
+        # human look. The convention path is ALSO suppressed for exactly
+        # one case: its own first (bootstrap) write when format was never
+        # explicitly confirmed via the picker (see portfolio_publisher.py's
+        # confidence check) — pr["auto_merge_suppressed"] carries that
+        # signal the same way Tier 2 always sets it.
         if pr_number is not None:
             artifacts["portfolio_pr_merged"] = False
-            if config.get_portfolio_auto_merge():
+            if pr_mode == "convention" and not pr_auto_merge_suppressed and config.get_portfolio_auto_merge():
                 try:
                     merge_result = github_merge_pr(pr_repo, pr_number)
                     artifacts["portfolio_pr_merged"] = merge_result["merged"]

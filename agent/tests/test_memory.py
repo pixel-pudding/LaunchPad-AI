@@ -148,6 +148,21 @@ def test_portfolio_config_overwrite_replaces_previous_value():
     assert result["auto_merge"] is False
 
 
+def test_portfolio_config_merge_preserves_explicit_format_across_auto_merge_only_update():
+    """set_portfolio_config uses .set(data, merge=True) specifically so a
+    later call that omits `format` (e.g. the dashboard just toggling
+    auto_merge) doesn't wipe a previously-explicit format choice back to
+    unset. A plain .set(data) replace would lose it."""
+    client = FakeFirestoreClient()
+    memory.set_portfolio_config("owner/portfolio-demo", True, format="convention", client=client)
+
+    memory.set_portfolio_config("owner/portfolio-demo", False, client=client)
+
+    result = memory.get_portfolio_config(client=client)
+    assert result["auto_merge"] is False
+    assert result["format"] == "convention"
+
+
 def test_idempotency_roundtrip():
     client = FakeFirestoreClient()
     assert memory.is_duplicate_delivery("delivery-1", client=client) is False

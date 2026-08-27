@@ -249,19 +249,29 @@ async def api_repos() -> dict:
 @app.post("/api/portfolio-config")
 async def api_set_portfolio_config(request: Request) -> dict:
     """
-    Persist the user's chosen portfolio repo + auto-merge setting to
-    Firestore config/portfolio. This is what agent/config.py resolves from
-    now on — the PORTFOLIO_REPO/PORTFOLIO_AUTO_MERGE env vars are only the
-    fallback for as long as nothing's been configured here yet.
+    Persist the user's chosen portfolio repo + auto-merge setting (and,
+    optionally, an explicit format choice) to Firestore config/portfolio.
+    This is what agent/config.py resolves from now on — the
+    PORTFOLIO_REPO/PORTFOLIO_AUTO_MERGE env vars are only the fallback for
+    as long as nothing's been configured here yet.
+
+    "format" ("convention"/"arbitrary") is OPTIONAL and deliberately NOT
+    defaulted here: if the caller omits it, memory.set_portfolio_config()
+    leaves the "format" key out of the write entirely (not written as
+    null), preserving the explicit-vs-defaulted distinction
+    agent/config.py's resolvers depend on. Defaulting it to "convention" at
+    write time here would destroy that distinction and make every
+    first-time bootstrap look "explicitly confirmed" when it isn't.
     """
     try:
         body = await request.json()
         portfolio_repo = body.get("portfolio_repo", "")
         auto_merge = bool(body.get("auto_merge", True))
+        format = body.get("format")  # None if omitted — left as None, not defaulted
 
         from agent import memory
 
-        memory.set_portfolio_config(portfolio_repo, auto_merge)
+        memory.set_portfolio_config(portfolio_repo, auto_merge, format=format)
         return {"ok": True, "error": None}
     except Exception as exc:
         logger.exception("Error saving portfolio config")
