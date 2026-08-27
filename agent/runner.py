@@ -17,8 +17,10 @@ from google.cloud import firestore
 from agent import memory
 from agent.subagents.announcer import assemble_post_package
 from agent.subagents.content_writer import write_content
+from agent.subagents.portfolio_publisher import publish as publish_to_portfolio
 from agent.subagents.relevance_curator import curate
 from agent.subagents.release_analyst import analyze_release
+from agent.subagents.self_reviewer import review as run_self_review
 from agent.tools.image_tool import generate_image
 
 logger = logging.getLogger(__name__)
@@ -41,8 +43,11 @@ def run_agent(event: dict) -> dict:
 
     Flow: idempotency check -> release_analyst -> relevance_curator ->
     memory write-back (if featured) -> [feature_new/update_existing only:
-    content_writer -> generate_image -> announcer, each failing gracefully:
-    log and continue/skip rather than crash the webhook] -> save decision ->
+    content_writer -> generate_image -> announcer -> self_reviewer (only if
+    a post_package exists to review) -> portfolio_publisher (runs
+    regardless of whether the post pipeline succeeded — the portfolio card
+    is an independent artifact), each failing gracefully: log and
+    continue/skip rather than crash the webhook] -> save decision ->
     mark processed -> return.
     """
     delivery_id = event.get("delivery_id", "")
@@ -68,12 +73,13 @@ def run_agent(event: dict) -> dict:
     decision = curate(profile, memory_context, delivery_id)
 
     artifacts: dict = {}
+    self_review_outcome = None
 
     if decision["action"] in ("feature_new", "update_existing"):
-        # TODO: Portfolio Publisher owns the richer write (portfolio_url, the
-        # full profile fields, etc.) — this just keeps memory minimally
-        # consistent so the curator sees this repo as already-featured on
-        # its next release.
+        # Safety-net write: even if everything below fails, Firestore still
+        # learns this repo is featured, so the curator won't repeat
+        # feature_new next time. portfolio_publisher below overwrites this
+        # with a richer record when it succeeds.
         memory.upsert_project(
             repo,
             {
@@ -115,12 +121,36 @@ def run_agent(event: dict) -> dict:
                     exc_info=True,
                 )
 
+        if artifacts.get("post_package"):
+            try:
+                revised_package, self_review_outcome = run_self_review(
+                    artifacts["post_package"], profile, decision, memory.get_voice_profile()
+                )
+                artifacts["post_package"] = revised_package
+            except Exception:
+                logger.error(
+                    "self_reviewer failed for delivery=%s — keeping the unreviewed post package",
+                    delivery_id,
+                    exc_info=True,
+                )
+
+        try:
+            artifacts["portfolio_pr"] = publish_to_portfolio(
+                repo, profile, decision, artifacts.get("post_package", {}), delivery_id
+            )
+        except Exception:
+            logger.error(
+                "portfolio_publisher failed for delivery=%s — post package (if any) is unaffected",
+                delivery_id,
+                exc_info=True,
+            )
+
     record = {
         "repo": repo,
         "tag": event.get("tag", ""),
         **decision,
         "artifacts": artifacts,
-        "self_review": None,
+        "self_review": self_review_outcome,
         "verified": None,
     }
 
