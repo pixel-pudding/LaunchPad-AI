@@ -83,3 +83,28 @@ def get_portfolio_auto_merge() -> bool:
     if saved is not None and "auto_merge" in saved:
         return bool(saved["auto_merge"])
     return PORTFOLIO_AUTO_MERGE
+
+
+def get_portfolio_format_explicit() -> str | None:
+    """The picker's raw, explicit format choice ("convention"/"arbitrary"),
+    or None if the "format" key was never written at all — distinct from
+    get_portfolio_format() below. This is what portfolio_publisher.py's
+    auto-merge confidence check reads: a repo whose format was only ever
+    defaulted (this returns None) hasn't been confirmed by anyone, so its
+    first (bootstrap) write shouldn't be trusted with auto-merge even
+    though it still resolves to "convention" for routing purposes.
+    """
+    from agent import memory
+
+    saved = memory.get_portfolio_config()
+    return saved.get("format") if saved and "format" in saved else None
+
+
+def get_portfolio_format() -> str:
+    """Resolved format for ROUTING: the explicit choice if one was ever
+    made, else "convention" — the project's own default assumption (see
+    CLAUDE.md's frozen contract). Tier 2 (agent/subagents/
+    portfolio_structure_detector.py) only ever runs when this explicitly
+    resolves to "arbitrary".
+    """
+    return get_portfolio_format_explicit() or "convention"

@@ -86,21 +86,35 @@ def get_portfolio_config(client: firestore.Client | None = None) -> dict[str, An
 
 
 def set_portfolio_config(
-    portfolio_repo: str, auto_merge: bool, client: firestore.Client | None = None
+    portfolio_repo: str,
+    auto_merge: bool,
+    format: str | None = None,
+    client: firestore.Client | None = None,
 ) -> None:
-    """Writes (overwrites) the config/portfolio doc. `ts` is written as a
-    Firestore server timestamp; get_portfolio_config() converts it back to
-    an ISO string on read, since the raw sentinel isn't JSON-serializable —
-    same reasoning as the decisions/{delivery_id} writes in runner.py.
+    """Writes the config/portfolio doc. `ts` is written as a Firestore
+    server timestamp; get_portfolio_config() converts it back to an ISO
+    string on read, since the raw sentinel isn't JSON-serializable — same
+    reasoning as the decisions/{delivery_id} writes in runner.py.
+
+    `format` ("convention"/"arbitrary") is OPTIONAL and its KEY PRESENCE
+    (not just its value) carries meaning to config.get_portfolio_format_
+    explicit(): present = the picker explicitly chose it, absent = purely
+    defaulted. So when `format` isn't passed here, the "format" key is left
+    out of this write entirely — not written as None/null, which would
+    still count as "present" on read. This write uses merge=True
+    specifically so that omitting `format` on a later call (e.g. a caller
+    just toggling auto_merge) doesn't wipe a previously-explicit choice
+    back to unset.
     """
     client = client or get_client()
-    client.collection("config").document("portfolio").set(
-        {
-            "portfolio_repo": portfolio_repo,
-            "auto_merge": auto_merge,
-            "ts": firestore.SERVER_TIMESTAMP,
-        }
-    )
+    data: dict[str, Any] = {
+        "portfolio_repo": portfolio_repo,
+        "auto_merge": auto_merge,
+        "ts": firestore.SERVER_TIMESTAMP,
+    }
+    if format is not None:
+        data["format"] = format
+    client.collection("config").document("portfolio").set(data, merge=True)
 
 
 # ── voice/profile — post voice ───────────────────────────────────────────
