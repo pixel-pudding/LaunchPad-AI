@@ -40,14 +40,19 @@ _DECISION = {
 _POST_PACKAGE = {"text": "t", "hashtags": ["python"], "image_url": "data:image/svg+xml;base64,ZmFrZQ=="}
 
 
-def _patch_common(monkeypatch, existing_projects_json, existing_skills_json="[]"):
+def _patch_common(monkeypatch, existing_projects_json, existing_skills_json="[]", portfolio_format=None):
     monkeypatch.setenv("PORTFOLIO_REPO", "owner/portfolio-demo")
-    # config.get_portfolio_repo() checks Firestore config/portfolio first —
-    # without this, every test below would hit a REAL firestore.Client()
-    # (slow, and fails with no credentials in this sandbox). None here
-    # means "not configured in Firestore", falling through to the env var
-    # set above, matching this file's tests' original assumption.
-    monkeypatch.setattr(memory, "get_portfolio_config", lambda client=None: None)
+    # config.get_portfolio_repo()/get_portfolio_format() check Firestore
+    # config/portfolio first — without this, every test below would hit a
+    # REAL firestore.Client() (slow, and fails with no credentials in this
+    # sandbox). portfolio_format=None (the default) means the "format" key
+    # is absent entirely — matching a repo that's never been explicitly
+    # configured, which is what most of this file's tests assume; routing
+    # still resolves to "convention" (the default) in that case. Pass
+    # portfolio_format="arbitrary"/"convention" to simulate an explicit
+    # picker choice.
+    config_doc = {"format": portfolio_format} if portfolio_format is not None else None
+    monkeypatch.setattr(memory, "get_portfolio_config", lambda client=None: config_doc)
 
     def fake_get_file(repo, path):
         if path == "projects.json":
@@ -80,7 +85,7 @@ def test_new_repo_appends_a_card(monkeypatch):
         "owner/local-rag-cli", _PROFILE, _DECISION, _POST_PACKAGE, "delivery-1"
     )
 
-    assert result == {"url": "https://github.com/owner/portfolio-demo/pull/7", "number": 7, "portfolio_repo": "owner/portfolio-demo"}
+    assert result == {"mode": "convention", "url": "https://github.com/owner/portfolio-demo/pull/7", "number": 7, "portfolio_repo": "owner/portfolio-demo"}
     projects = json.loads(opened["files"]["projects.json"])
     assert len(projects) == 1
     assert projects[0]["repo"] == "owner/local-rag-cli"
@@ -117,13 +122,63 @@ def test_publish_uses_delivery_id_in_branch_name(monkeypatch):
     assert opened["branch"] == "launchpad-ai/my-delivery-id"
 
 
-def test_missing_projects_json_defaults_to_empty_list(monkeypatch):
+def test_defaulted_bootstrap_still_uses_convention_not_tier_2_but_suppresses_auto_merge(monkeypatch):
+    """The exact scenario the format-routing fix exists for: a repo meant
+    to use the convention (format never explicitly set — e.g. a fresh demo
+    repo) whose projects.json simply hasn't been written yet. Routing keys
+    off the RESOLVED format (defaults to "convention"), not file existence
+    — so this must bootstrap via convention, NOT Tier 2. But since format
+    was never explicitly confirmed, this specific first write isn't
+    trusted with auto-merge — a review PR, not silence."""
     opened, _ = _patch_common(monkeypatch, existing_projects_json=None)
 
-    portfolio_publisher.publish("owner/repo", _PROFILE, _DECISION, _POST_PACKAGE, "d")
+    result = portfolio_publisher.publish("owner/repo", _PROFILE, _DECISION, _POST_PACKAGE, "d")
 
+    assert result["mode"] == "convention"
+    assert "projects.json" in opened["files"]
     projects = json.loads(opened["files"]["projects.json"])
     assert len(projects) == 1
+    assert result["auto_merge_suppressed"] is True
+
+
+def test_explicit_convention_bootstrap_is_not_suppressed(monkeypatch):
+    """Format explicitly confirmed "convention" via the picker — even on
+    the very first write (projects.json absent), this counts as real
+    evidence, not a guess, so auto-merge is NOT suppressed."""
+    opened, _ = _patch_common(monkeypatch, existing_projects_json=None, portfolio_format="convention")
+
+    result = portfolio_publisher.publish("owner/repo", _PROFILE, _DECISION, _POST_PACKAGE, "d")
+
+    assert result["mode"] == "convention"
+    assert "auto_merge_suppressed" not in result
+
+
+def test_post_bootstrap_release_is_not_suppressed_regardless_of_format(monkeypatch):
+    """Once projects.json exists, is_bootstrap is False — confident is True
+    regardless of whether format was ever explicitly set. Every release
+    after the first auto-merges normally with no further configuration."""
+    opened, _ = _patch_common(monkeypatch, existing_projects_json="[]")  # format defaulted, file exists
+
+    result = portfolio_publisher.publish("owner/repo", _PROFILE, _DECISION, _POST_PACKAGE, "d")
+
+    assert result["mode"] == "convention"
+    assert "auto_merge_suppressed" not in result
+
+
+def test_explicit_arbitrary_format_routes_to_tier_2_even_if_projects_json_would_be_absent(monkeypatch):
+    """format explicitly "arbitrary" is the ONLY thing that routes to Tier
+    2 now — not file absence."""
+    opened, _ = _patch_common(monkeypatch, existing_projects_json=None, portfolio_format="arbitrary")
+    monkeypatch.setattr(
+        portfolio_publisher,
+        "detect_structure",
+        lambda portfolio_repo: {"confidence": "low", "projects_location": None, "reasoning": "n/a"},
+    )
+
+    result = portfolio_publisher.publish("owner/repo", _PROFILE, _DECISION, _POST_PACKAGE, "d")
+
+    assert result["mode"] == "arbitrary_low"
+    assert "projects.json" not in opened["files"]
 
 
 def test_parse_pr_number_handles_multi_digit_numbers():
@@ -204,7 +259,7 @@ def test_skills_update_failure_preserves_card_and_pr(monkeypatch):
 
     result = portfolio_publisher.publish("owner/repo", _PROFILE, _DECISION, _POST_PACKAGE, "d")
 
-    assert result == {"url": "https://github.com/owner/portfolio-demo/pull/7", "number": 7, "portfolio_repo": "owner/portfolio-demo"}
+    assert result == {"mode": "convention", "url": "https://github.com/owner/portfolio-demo/pull/7", "number": 7, "portfolio_repo": "owner/portfolio-demo"}
     assert "skills.json" not in opened["files"]
     assert "projects.json" in opened["files"]
     assert json.loads(opened["files"]["projects.json"])[0]["repo"] == "owner/repo"
@@ -267,3 +322,125 @@ def test_publish_uses_firestore_configured_repo_over_env(monkeypatch):
 
     assert opened["repo"] == "owner/firestore-repo"
     assert result["portfolio_repo"] == "owner/firestore-repo"
+
+
+# ── Tier 2: arbitrary-portfolio support ──────────────────────────────────
+#
+# detect_structure/generate_format_matched_file are patched as
+# `portfolio_publisher.<name>` — bound via `from ... import` at module
+# load, same reasoning as github_get_file/github_open_pr above. The
+# detector's own confidence-downgrade guardrail is tested directly in
+# test_portfolio_structure_detector.py; these tests confirm publish()
+# correctly ROUTES based on whatever detect_structure() reports.
+
+
+def test_arbitrary_high_confidence_opens_format_matched_pr(monkeypatch):
+    opened, _ = _patch_common(monkeypatch, existing_projects_json=None, portfolio_format="arbitrary")
+    monkeypatch.setattr(
+        portfolio_publisher,
+        "detect_structure",
+        lambda portfolio_repo: {
+            "confidence": "high",
+            "projects_location": {
+                "file_path": "src/data/projects.json",
+                "format": "json_array",
+                "insertion_notes": "append an object",
+            },
+            "reasoning": "found it",
+        },
+    )
+    monkeypatch.setattr(
+        portfolio_publisher,
+        "generate_format_matched_file",
+        lambda portfolio_repo, location, profile, decision, post_package, repo: '[{"title": "new"}]',
+    )
+
+    result = portfolio_publisher.publish("owner/repo", _PROFILE, _DECISION, _POST_PACKAGE, "d")
+
+    assert result["mode"] == "arbitrary_high"
+    assert result["auto_merge_suppressed"] is True
+    assert opened["files"] == {"src/data/projects.json": '[{"title": "new"}]'}
+    assert "review before merging" in opened["body"].lower()
+    assert "src/data/projects.json" in opened["body"]
+
+
+def test_arbitrary_low_confidence_adds_standalone_file_touches_nothing_existing(monkeypatch):
+    opened, _ = _patch_common(monkeypatch, existing_projects_json=None, portfolio_format="arbitrary")
+    monkeypatch.setattr(
+        portfolio_publisher,
+        "detect_structure",
+        lambda portfolio_repo: {"confidence": "low", "projects_location": None, "reasoning": "unsure"},
+    )
+
+    result = portfolio_publisher.publish("owner/local-rag-cli", _PROFILE, _DECISION, _POST_PACKAGE, "d")
+
+    assert result["mode"] == "arbitrary_low"
+    assert result["auto_merge_suppressed"] is True
+    assert len(opened["files"]) == 1
+    ((path, content),) = opened["files"].items()
+    assert path.startswith("launchpad-ai/")
+    assert path.endswith(".md")
+    assert "local-rag-cli" in content
+    assert "nothing in your existing site was changed" in opened["body"].lower()
+
+
+def test_confidence_downgrade_result_routes_through_content_only_path(monkeypatch):
+    """detect_structure() forces confidence to "low" when the model names a
+    file outside the fetched listing (tested directly in
+    test_portfolio_structure_detector.py). This confirms publish() honors
+    whatever detect_structure() reports — a downgraded result routes
+    through the exact same content-only path as a genuinely low confidence,
+    with no special-casing that could accidentally still edit a file."""
+    opened, _ = _patch_common(monkeypatch, existing_projects_json=None, portfolio_format="arbitrary")
+    monkeypatch.setattr(
+        portfolio_publisher,
+        "detect_structure",
+        lambda portfolio_repo: {
+            "confidence": "low",
+            "projects_location": None,
+            "reasoning": "Model claimed high confidence citing an unlisted file — downgraded.",
+        },
+    )
+
+    result = portfolio_publisher.publish("owner/repo", _PROFILE, _DECISION, _POST_PACKAGE, "d")
+
+    assert result["mode"] == "arbitrary_low"
+    assert len(opened["files"]) == 1  # only the standalone content file — nothing else touched
+
+
+def test_arbitrary_path_uses_tag_in_content_filename(monkeypatch):
+    opened, _ = _patch_common(monkeypatch, existing_projects_json=None, portfolio_format="arbitrary")
+    monkeypatch.setattr(
+        portfolio_publisher,
+        "detect_structure",
+        lambda portfolio_repo: {"confidence": "low", "projects_location": None, "reasoning": "n/a"},
+    )
+
+    portfolio_publisher.publish("owner/repo", _PROFILE, _DECISION, _POST_PACKAGE, "d", tag="v2.0")
+
+    (path,) = opened["files"].keys()
+    assert path == "launchpad-ai/owner-repo-v2.0.md"
+
+
+def test_arbitrary_path_falls_back_to_delivery_id_when_tag_missing(monkeypatch):
+    opened, _ = _patch_common(monkeypatch, existing_projects_json=None, portfolio_format="arbitrary")
+    monkeypatch.setattr(
+        portfolio_publisher,
+        "detect_structure",
+        lambda portfolio_repo: {"confidence": "low", "projects_location": None, "reasoning": "n/a"},
+    )
+
+    portfolio_publisher.publish("owner/repo", _PROFILE, _DECISION, _POST_PACKAGE, "delivery-xyz")
+
+    (path,) = opened["files"].keys()
+    assert path == "launchpad-ai/owner-repo-delivery-xyz.md"
+
+
+def test_build_standalone_markdown_includes_title_description_stack_link():
+    md = portfolio_publisher._build_standalone_markdown("owner/repo", _PROFILE, _DECISION, _POST_PACKAGE)
+
+    assert _PROFILE["name"] in md
+    assert _PROFILE["summary"] in md
+    for skill in _PROFILE["stack"]:
+        assert skill in md
+    assert "https://github.com/owner/repo" in md

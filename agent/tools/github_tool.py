@@ -249,6 +249,56 @@ def github_open_pr(repo: str, branch: str, title: str, body: str, files: dict[st
     return pr_resp.json()["html_url"]
 
 
+_SHALLOW_LISTING_EXTENSIONS = (".json", ".md", ".jsx", ".tsx", ".html", ".astro")
+
+
+def _is_relevant_shallow_listing_file(name: str) -> bool:
+    if name.endswith(_SHALLOW_LISTING_EXTENSIONS):
+        return True
+    lower = name.lower()
+    return "config" in lower and lower.endswith((".js", ".mjs", ".ts", ".cjs"))
+
+
+def github_list_repo_shallow(repo: str, max_files: int = 40) -> list[str]:
+    """Lists up to `max_files` relevant (source/data/config) file paths from
+    the repo's root and one level into its subdirectories — root + one
+    level, NOT a full recursive tree walk, to keep this cheap and
+    read-only. Returns relative paths. GET calls only; never writes.
+    """
+    headers = _auth_headers()
+    paths: list[str] = []
+
+    root_resp = requests.get(f"{_GITHUB_API}/repos/{repo}/contents", headers=headers, timeout=10)
+    if root_resp.status_code != 200:
+        return paths
+    root_items = root_resp.json()
+
+    subdirs: list[str] = []
+    for item in root_items:
+        if len(paths) >= max_files:
+            return paths[:max_files]
+        if item["type"] == "file" and _is_relevant_shallow_listing_file(item["name"]):
+            paths.append(item["path"])
+        elif item["type"] == "dir" and not item["name"].startswith("."):
+            subdirs.append(item["path"])
+
+    for dir_path in subdirs:
+        if len(paths) >= max_files:
+            break
+        dir_resp = requests.get(
+            f"{_GITHUB_API}/repos/{repo}/contents/{dir_path}", headers=headers, timeout=10
+        )
+        if dir_resp.status_code != 200:
+            continue
+        for item in dir_resp.json():
+            if len(paths) >= max_files:
+                break
+            if item["type"] == "file" and _is_relevant_shallow_listing_file(item["name"]):
+                paths.append(item["path"])
+
+    return paths[:max_files]
+
+
 def github_merge_pr(repo: str, pr_number: int) -> dict[str, Any]:
     """Merges pull request `pr_number` on `repo`. Returns {merged: bool, sha: str | None}.
 
