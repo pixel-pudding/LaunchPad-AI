@@ -63,9 +63,11 @@ Return ONLY structured output matching the schema.
 _EDIT_INSTRUCTION = """\
 You are editing a portfolio site file to add ONE new project entry, in \
 this file's OWN existing format — do not change the file's structure, \
-styling, other entries, or anything unrelated. Match the exact conventions \
-(quoting, indentation, field names) already used in the file. Return the \
-COMPLETE new file content, not a diff or a snippet.
+styling, other entries, emojis (such as 👋), copyright symbols, or anything unrelated. \
+Match the exact conventions (quoting, indentation, field names, CSS classes, SVGs) already used in the file. \
+If new_project.demo_url is provided and non-empty, include a Live Demo link alongside the GitHub repo link matching the style of existing cards with demo links. If demo_url is empty, only render the GitHub link. \
+If new_project.image_url is provided, use it directly as the image src in <img src="..." />. \
+Return the COMPLETE new file content, preserving all existing text, emojis, and symbols verbatim.
 
 Return ONLY structured output matching the schema.
 """
@@ -181,6 +183,7 @@ def _build_edit_prompt(
             "stack": profile.get("stack"),
             "positioning": decision.get("positioning"),
             "image_url": post_package.get("image_url"),
+            "demo_url": profile.get("demo_url"),
             "url": f"https://github.com/{repo}",
         },
     }

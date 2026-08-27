@@ -122,7 +122,10 @@ def run_agent(event: dict) -> dict:
         if draft is not None:
             image_url = ""
             try:
-                image_url = generate_image(draft.get("image_prompt", ""))
+                try:
+                    image_url = generate_image(draft.get("image_prompt", ""), repo=repo, profile=profile)
+                except TypeError:
+                    image_url = generate_image(draft.get("image_prompt", ""))
             except Exception:
                 logger.error(
                     "image_tool failed for delivery=%s — continuing without an image",
