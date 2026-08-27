@@ -63,14 +63,14 @@ def _build_app_jwt() -> str:
     return jwt.encode(signer, payload).decode("utf-8")
 
 
-def _get_installation_id(jwt_token: str) -> str:
-    override = os.environ.get("GITHUB_APP_INSTALLATION_ID")
-    if override:
-        return override
 _installation_tokens: dict[str, tuple[str, float]] = {}
 
 
 def _get_installation_id(jwt_token: str, owner: str | None = None) -> str:
+    override = os.environ.get("GITHUB_APP_INSTALLATION_ID")
+    if override:
+        return override
+
     resp = requests.get(
         f"{_GITHUB_API}/app/installations",
         headers={"Authorization": f"Bearer {jwt_token}", "Accept": "application/vnd.github+json"},
