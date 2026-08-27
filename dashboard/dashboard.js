@@ -3,14 +3,50 @@
 
 let currentPostPackage = null;
 
-document.addEventListener("DOMContentLoaded", () => {
-    // Handle URL hash on initial load (#overview or #dashboard)
+// ── Tab Switching Navigation ────────────────────────────────
+function switchTab(tabName) {
+    const landingView = document.getElementById("view-landing");
+    const dashboardView = document.getElementById("view-dashboard");
+    const landingTabBtn = document.getElementById("tab-btn-landing");
+    const dashboardTabBtn = document.getElementById("tab-btn-dashboard");
+
+    if (!landingView || !dashboardView) return;
+
+    if (tabName === "dashboard") {
+        landingView.style.display = "none";
+        dashboardView.style.display = "block";
+        if (landingTabBtn) landingTabBtn.classList.remove("active");
+        if (dashboardTabBtn) dashboardTabBtn.classList.add("active");
+        if (window.location.hash !== "#dashboard") {
+            window.location.hash = "dashboard";
+        }
+    } else {
+        landingView.style.display = "block";
+        dashboardView.style.display = "none";
+        if (landingTabBtn) landingTabBtn.classList.add("active");
+        if (dashboardTabBtn) dashboardTabBtn.classList.remove("active");
+        if (window.location.hash !== "#overview") {
+            window.location.hash = "overview";
+        }
+    }
+}
+
+// Expose functions globally on window
+window.switchTab = switchTab;
+
+function applyHashRoute() {
     const hash = window.location.hash.replace("#", "");
     if (hash === "dashboard") {
         switchTab("dashboard");
     } else {
         switchTab("landing");
     }
+}
+
+window.addEventListener("hashchange", applyHashRoute);
+
+document.addEventListener("DOMContentLoaded", () => {
+    applyHashRoute();
 
     // Initial data fetch
     loadDecisions();
@@ -22,28 +58,6 @@ document.addEventListener("DOMContentLoaded", () => {
         loadLatestPost();
     }, 30000);
 });
-
-// ── Tab Switching Navigation ────────────────────────────────
-function switchTab(tabName) {
-    const landingView = document.getElementById("view-landing");
-    const dashboardView = document.getElementById("view-dashboard");
-    const landingTabBtn = document.getElementById("tab-btn-landing");
-    const dashboardTabBtn = document.getElementById("tab-btn-dashboard");
-
-    if (tabName === "dashboard") {
-        landingView.style.display = "none";
-        dashboardView.style.display = "block";
-        landingTabBtn.classList.remove("active");
-        dashboardTabBtn.classList.add("active");
-        window.location.hash = "dashboard";
-    } else {
-        landingView.style.display = "block";
-        dashboardView.style.display = "none";
-        landingTabBtn.classList.add("active");
-        dashboardTabBtn.classList.remove("active");
-        window.location.hash = "overview";
-    }
-}
 
 // ── Decision Log Fetching & Rendering ─────────────────────────
 async function loadDecisions() {
