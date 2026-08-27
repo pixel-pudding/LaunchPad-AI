@@ -59,7 +59,7 @@ function parseRepoSlug(input) {
 }
 
 function loadConnectedPortfolioRepo() {
-    const saved = localStorage.getItem("launchpad_portfolio_repo") || "AmeyaSingh23/personal-portfolio";
+    const saved = localStorage.getItem("launchpad_portfolio_repo");
     const inputWrapper = document.getElementById("repo-input-wrapper");
     const connectedState = document.getElementById("repo-connected-state");
     const nameDisplay = document.getElementById("portfolio-target-name");
@@ -73,6 +73,7 @@ function loadConnectedPortfolioRepo() {
     } else if (inputWrapper && connectedState) {
         inputWrapper.style.display = "flex";
         connectedState.style.display = "none";
+        if (inputEl) inputEl.value = "";
     }
 }
 
@@ -100,8 +101,8 @@ function editPortfolioRepo() {
         inputWrapper.style.display = "flex";
         connectedState.style.display = "none";
         if (inputEl) {
+            inputEl.value = "";
             inputEl.focus();
-            inputEl.select();
         }
     }
 }
