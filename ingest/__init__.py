@@ -82,6 +82,7 @@ def _build_pubsub_message(event: dict[str, Any], delivery_id: str) -> dict[str, 
 
     tag = release.get("tag_name", "")
     release_name = release.get("name") or tag
+    release_body = release.get("body") or ""
 
     return {
         "delivery_id": delivery_id,
@@ -89,6 +90,7 @@ def _build_pubsub_message(event: dict[str, Any], delivery_id: str) -> dict[str, 
         "repo": repo.get("full_name", ""),
         "tag": tag,
         "release_name": release_name,
+        "release_body": release_body,
     }
 
 
