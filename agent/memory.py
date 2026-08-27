@@ -69,6 +69,40 @@ def set_context_profile(data: dict[str, Any], client: firestore.Client | None = 
     client.collection("context").document("profile").set(data, merge=True)
 
 
+# ── config/portfolio — the user's chosen portfolio repo + auto-merge setting ──
+
+
+def get_portfolio_config(client: firestore.Client | None = None) -> dict[str, Any] | None:
+    """Returns the saved config/portfolio doc, or None if never configured."""
+    client = client or get_client()
+    doc = client.collection("config").document("portfolio").get()
+    if not doc.exists:
+        return None
+    data = doc.to_dict()
+    ts = data.get("ts")
+    if ts is not None and hasattr(ts, "isoformat"):
+        data["ts"] = ts.isoformat()
+    return data
+
+
+def set_portfolio_config(
+    portfolio_repo: str, auto_merge: bool, client: firestore.Client | None = None
+) -> None:
+    """Writes (overwrites) the config/portfolio doc. `ts` is written as a
+    Firestore server timestamp; get_portfolio_config() converts it back to
+    an ISO string on read, since the raw sentinel isn't JSON-serializable —
+    same reasoning as the decisions/{delivery_id} writes in runner.py.
+    """
+    client = client or get_client()
+    client.collection("config").document("portfolio").set(
+        {
+            "portfolio_repo": portfolio_repo,
+            "auto_merge": auto_merge,
+            "ts": firestore.SERVER_TIMESTAMP,
+        }
+    )
+
+
 # ── voice/profile — post voice ───────────────────────────────────────────
 
 

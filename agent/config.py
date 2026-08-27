@@ -54,3 +54,32 @@ check_vertex_ai_enabled()
 # user's LIVE site, not just this agent's own behavior. NOT added to
 # .env.example here (outside agent/'s lane) — flagged for the teammate.
 PORTFOLIO_AUTO_MERGE = os.environ.get("PORTFOLIO_AUTO_MERGE", "1").strip().lower() in ("1", "true")
+
+
+def get_portfolio_repo() -> str | None:
+    """Resolves the target portfolio repo: Firestore config/portfolio wins
+    (the user's choice via the repo picker), falling back to the
+    PORTFOLIO_REPO env var. None if neither is set — portfolio_publisher
+    treats that as "not configured yet", not an error.
+
+    Lazily imports memory so this module's own import-time checks above
+    stay side-effect-free (no Firestore client construction at import).
+    """
+    from agent import memory
+
+    saved = memory.get_portfolio_config()
+    if saved and saved.get("portfolio_repo"):
+        return saved["portfolio_repo"]
+    return os.environ.get("PORTFOLIO_REPO")
+
+
+def get_portfolio_auto_merge() -> bool:
+    """Resolves the auto-merge flag: Firestore config/portfolio wins,
+    falling back to the PORTFOLIO_AUTO_MERGE env-derived constant above.
+    """
+    from agent import memory
+
+    saved = memory.get_portfolio_config()
+    if saved is not None and "auto_merge" in saved:
+        return bool(saved["auto_merge"])
+    return PORTFOLIO_AUTO_MERGE

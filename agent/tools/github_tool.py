@@ -239,6 +239,16 @@ def github_merge_pr(repo: str, pr_number: int) -> dict[str, Any]:
     return {"merged": bool(data.get("merged", False)), "sha": data.get("sha")}
 
 
+def github_list_installation_repos() -> list[dict[str, Any]]:
+    """Lists repos accessible to this GitHub App installation (raw GitHub
+    repo objects — callers pick the fields they need)."""
+    resp = requests.get(
+        f"{_GITHUB_API}/installation/repositories", headers=_auth_headers(), timeout=10
+    )
+    resp.raise_for_status()
+    return resp.json().get("repositories", [])
+
+
 def github_open_issue(repo: str, title: str, body: str) -> str:
     """Opens an issue on `repo`. Returns the issue URL."""
     resp = requests.post(
