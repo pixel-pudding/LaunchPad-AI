@@ -226,6 +226,61 @@ async def api_latest_post() -> dict:
         return {}
 
 
+# ── GET /api/repos — repos the GitHub App can access, smart pre-select ──
+@app.get("/api/repos")
+async def api_repos() -> dict:
+    """
+    List repos the GitHub App installation can access, with ONE smart
+    pre-select for the likely portfolio repo (agent/subagents/
+    portfolio_repo_picker.py). The agent only SUGGESTS — the user confirms
+    (or picks something else) via POST /api/portfolio-config.
+    """
+    try:
+        from agent.subagents.portfolio_repo_picker import list_candidate_repos
+
+        repos = list_candidate_repos()
+        return {"repos": repos, "error": None}
+    except Exception as exc:
+        logger.exception("Error listing installation repos")
+        return {"repos": [], "error": str(exc)}
+
+
+# ── POST /api/portfolio-config — save the chosen portfolio repo ─────
+@app.post("/api/portfolio-config")
+async def api_set_portfolio_config(request: Request) -> dict:
+    """
+    Persist the user's chosen portfolio repo + auto-merge setting to
+    Firestore config/portfolio. This is what agent/config.py resolves from
+    now on — the PORTFOLIO_REPO/PORTFOLIO_AUTO_MERGE env vars are only the
+    fallback for as long as nothing's been configured here yet.
+    """
+    try:
+        body = await request.json()
+        portfolio_repo = body.get("portfolio_repo", "")
+        auto_merge = bool(body.get("auto_merge", True))
+
+        from agent import memory
+
+        memory.set_portfolio_config(portfolio_repo, auto_merge)
+        return {"ok": True, "error": None}
+    except Exception as exc:
+        logger.exception("Error saving portfolio config")
+        return {"ok": False, "error": str(exc)}
+
+
+# ── GET /api/portfolio-config — the current saved portfolio config ──
+@app.get("/api/portfolio-config")
+async def api_get_portfolio_config() -> dict | None:
+    """Return the saved config/portfolio doc, or null if never configured."""
+    try:
+        from agent import memory
+
+        return memory.get_portfolio_config()
+    except Exception:
+        logger.exception("Error fetching portfolio config")
+        return None
+
+
 # ── Entrypoint ───────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn

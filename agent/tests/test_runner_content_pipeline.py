@@ -10,16 +10,24 @@ patching the originating module (e.g. content_writer.write_content) would
 have no effect, since `from x import y` binds a separate reference into
 runner's own namespace at import time. memory.* is patched on the memory
 module itself, since runner.py calls those via `memory.<name>(...)`
-attribute access. config.PORTFOLIO_AUTO_MERGE is patched on the config
-module the same way, since runner.py reads `config.PORTFOLIO_AUTO_MERGE`
-as an attribute lookup, not a pre-bound copy.
+attribute access.
+
+runner.py now calls config.get_portfolio_auto_merge() (Firestore-first,
+env-fallback), not the raw PORTFOLIO_AUTO_MERGE constant directly. That
+function's Firestore read is neutralized in _patch_memory (memory.
+get_portfolio_config -> None), so tests keep controlling the resolved value
+the same way as before — `monkeypatch.setattr(config, "PORTFOLIO_AUTO_MERGE",
+...)` — since that's a plain module-global read inside the fallback branch.
 
 Confirms: a "skip" decision runs NONE of this; a "feature_new" decision
-with auto-merge ON gets a merged PR; auto-merge OFF never calls
+with auto-merge ON gets a merged PR — targeting the PR's actual repo
+(portfolio_repo), not the source release repo, a regression check for a
+real bug found and fixed in this same change; auto-merge OFF never calls
 github_merge_pr and leaves the PR open; a merge failure leaves the open PR
-and post_package intact with merged=False; and a next_build_suggester
-failure leaves everything built before it (decision, post, PR, merge
-status) completely untouched.
+and post_package intact with merged=False; no portfolio configured (neither
+Firestore nor env) skips publishing gracefully with the post still
+succeeding; and a next_build_suggester failure leaves everything built
+before it (decision, post, PR, merge status) completely untouched.
 """
 
 from __future__ import annotations
@@ -51,6 +59,14 @@ def _patch_memory(monkeypatch):
     monkeypatch.setattr(memory, "get_context_profile", lambda client=None: {})
     monkeypatch.setattr(memory, "get_voice_profile", lambda client=None: {})
     monkeypatch.setattr(memory, "upsert_project", lambda repo, data, client=None: None)
+    # config.get_portfolio_auto_merge() checks Firestore config/portfolio
+    # first — without this, every test would hit a REAL firestore.Client().
+    # None means "not configured in Firestore", so it falls through to the
+    # PORTFOLIO_AUTO_MERGE constant, which individual tests still patch via
+    # `monkeypatch.setattr(config, "PORTFOLIO_AUTO_MERGE", ...)` exactly as
+    # before — that fallback lookup is a plain module-global read, so it
+    # sees the patched value fine.
+    monkeypatch.setattr(memory, "get_portfolio_config", lambda client=None: None)
     monkeypatch.setattr(
         memory,
         "save_decision",
@@ -88,6 +104,7 @@ def _patch_happy_content_pipeline(monkeypatch, pr_number=1):
         lambda repo, profile, decision, post_package, delivery_id: {
             "url": f"https://github.com/owner/portfolio-demo/pull/{pr_number}",
             "number": pr_number,
+            "portfolio_repo": "owner/portfolio-demo",
         },
     )
     monkeypatch.setattr(
@@ -135,7 +152,7 @@ def test_skip_runs_none_of_the_content_publishing_or_suggestion_pipeline(monkeyp
     monkeypatch.setattr(
         runner,
         "publish_to_portfolio",
-        lambda *a, **k: called.__setitem__("portfolio_publisher", True) or {"url": "", "number": 1},
+        lambda *a, **k: called.__setitem__("portfolio_publisher", True) or {"url": "", "number": 1, "portfolio_repo": ""},
     )
     monkeypatch.setattr(
         runner,
@@ -173,7 +190,12 @@ def test_feature_new_with_auto_merge_on_produces_merged_pr_and_suggestions(monke
     result = runner.run_agent({"delivery_id": "d2", "repo": "owner/repo", "tag": "v1.0"})
 
     assert result["action"] == "feature_new"
-    assert merge_calls == [("owner/repo", 1)]  # merged exactly the PR this run opened
+    # Regression check for the merge-repo bug: this must target the PR's
+    # actual repo (owner/portfolio-demo), NOT `repo` (owner/repo, the
+    # source release repo the webhook fired for) — those are two different
+    # repos, and merging against the wrong one is exactly what shipped
+    # before this fix.
+    assert merge_calls == [("owner/portfolio-demo", 1)]
     assert result["artifacts"]["portfolio_pr"] == "https://github.com/owner/portfolio-demo/pull/1"
     assert result["artifacts"]["portfolio_pr_merged"] is True
     assert result["artifacts"]["portfolio_pr_sha"] == "merged-sha"
@@ -184,6 +206,50 @@ def test_feature_new_with_auto_merge_on_produces_merged_pr_and_suggestions(monke
     # dict must stay JSON-serializable (a plain ISO string, not the
     # SERVER_TIMESTAMP sentinel).
     assert isinstance(result["ts"], str)
+    assert saved["record"]["artifacts"] == result["artifacts"]
+
+
+def test_no_portfolio_configured_skips_publish_gracefully_post_still_succeeds(monkeypatch):
+    """Neither Firestore config/portfolio nor the PORTFOLIO_REPO env is
+    set — publish_to_portfolio returns None (not an exception), per
+    portfolio_publisher's own contract. The decision and post_package must
+    succeed exactly as if nothing about the portfolio had ever run, and
+    github_merge_pr must never even be attempted (there's no PR number to
+    merge)."""
+    saved = _patch_memory(monkeypatch)
+    monkeypatch.setattr(runner, "analyze_release", lambda event: dict(_PROFILE))
+    monkeypatch.setattr(runner, "curate", lambda profile, memory_context, delivery_id=None: dict(_FEATURE_NEW_DECISION))
+    monkeypatch.setattr(
+        runner,
+        "write_content",
+        lambda profile, decision, voice_profile: {
+            "text": "Shipped a thing.",
+            "hashtags": ["python"],
+            "image_prompt": "a diagram",
+        },
+    )
+    monkeypatch.setattr(runner, "generate_image", lambda prompt: "data:x")
+    monkeypatch.setattr(
+        runner,
+        "run_self_review",
+        lambda post_package, profile, decision, voice_profile: (post_package, {"passed": True, "issues": [], "revised": False}),
+    )
+    monkeypatch.setattr(runner, "publish_to_portfolio", lambda *a, **k: None)
+    merge_called = {"value": False}
+    monkeypatch.setattr(runner, "github_merge_pr", lambda *a, **k: merge_called.__setitem__("value", True) or {})
+    monkeypatch.setattr(runner, "suggest_next_builds", lambda *a, **k: [])
+
+    result = runner.run_agent({"delivery_id": "d10", "repo": "owner/repo", "tag": "v1.0"})
+
+    assert result["action"] == "feature_new"
+    assert result["artifacts"]["post_package"] == {
+        "text": "Shipped a thing.",
+        "hashtags": ["python"],
+        "image_url": "data:x",
+    }
+    assert "portfolio_pr" not in result["artifacts"]
+    assert "portfolio_pr_merged" not in result["artifacts"]
+    assert merge_called["value"] is False
     assert saved["record"]["artifacts"] == result["artifacts"]
 
 
@@ -243,7 +309,7 @@ def test_content_writer_failure_degrades_to_no_post_package_but_publisher_still_
     monkeypatch.setattr(
         runner,
         "publish_to_portfolio",
-        lambda *a, **k: {"url": "https://github.com/owner/portfolio-demo/pull/4", "number": 4},
+        lambda *a, **k: {"url": "https://github.com/owner/portfolio-demo/pull/4", "number": 4, "portfolio_repo": "owner/portfolio-demo"},
     )
     monkeypatch.setattr(runner, "github_merge_pr", lambda repo, pr_number: {"merged": True, "sha": "s"})
     monkeypatch.setattr(runner, "suggest_next_builds", lambda *a, **k: [])
@@ -285,7 +351,7 @@ def test_image_tool_failure_still_produces_post_package_without_image(monkeypatc
     monkeypatch.setattr(
         runner,
         "publish_to_portfolio",
-        lambda *a, **k: {"url": "https://github.com/owner/portfolio-demo/pull/5", "number": 5},
+        lambda *a, **k: {"url": "https://github.com/owner/portfolio-demo/pull/5", "number": 5, "portfolio_repo": "owner/portfolio-demo"},
     )
     monkeypatch.setattr(runner, "github_merge_pr", lambda repo, pr_number: {"merged": True, "sha": "s"})
     monkeypatch.setattr(runner, "suggest_next_builds", lambda *a, **k: [])
@@ -319,7 +385,7 @@ def test_self_reviewer_failure_keeps_the_unreviewed_post_package(monkeypatch):
     monkeypatch.setattr(
         runner,
         "publish_to_portfolio",
-        lambda *a, **k: {"url": "https://github.com/owner/portfolio-demo/pull/6", "number": 6},
+        lambda *a, **k: {"url": "https://github.com/owner/portfolio-demo/pull/6", "number": 6, "portfolio_repo": "owner/portfolio-demo"},
     )
     monkeypatch.setattr(runner, "github_merge_pr", lambda repo, pr_number: {"merged": True, "sha": "s"})
     monkeypatch.setattr(runner, "suggest_next_builds", lambda *a, **k: [])
@@ -397,7 +463,7 @@ def test_next_build_suggester_failure_preserves_everything_else(monkeypatch):
     monkeypatch.setattr(
         runner,
         "publish_to_portfolio",
-        lambda *a, **k: {"url": "https://github.com/owner/portfolio-demo/pull/9", "number": 9},
+        lambda *a, **k: {"url": "https://github.com/owner/portfolio-demo/pull/9", "number": 9, "portfolio_repo": "owner/portfolio-demo"},
     )
     monkeypatch.setattr(runner, "github_merge_pr", lambda repo, pr_number: {"merged": True, "sha": "final-sha"})
 

@@ -1,8 +1,17 @@
 """
 LaunchPad-AI — Portfolio Publisher (agent/subagents/portfolio_publisher.py).
 
-Opens a PR on the portfolio repo (env PORTFOLIO_REPO) that adds or updates a
-project card in projects.json — a single JSON array at the repo root.
+Opens a PR on the portfolio repo that adds or updates a project card in
+projects.json — a single JSON array at the repo root. The target repo comes
+from config.get_portfolio_repo(): Firestore config/portfolio (set via the
+repo picker, POST /api/portfolio-config) wins, falling back to the
+PORTFOLIO_REPO env var. If neither is set, publish() returns None and logs
+at INFO — an expected "not configured yet" state, not a failure.
+
+publish() returns {url, number, portfolio_repo} so runner.py's auto-merge
+step targets the repo the PR actually lives on, not the source release
+repo — those are two different repos and merging against the wrong one is
+exactly the kind of bug this return shape exists to prevent.
 
 Detection is against the ACTUAL file content, not decision["action"]: if an
 entry for this repo already exists there, it's edited in place, never
@@ -35,11 +44,10 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from datetime import datetime, timezone
 from typing import Any
 
-from agent import memory
+from agent import config, memory
 from agent.tools.github_tool import github_get_file, github_open_pr
 
 logger = logging.getLogger(__name__)
@@ -63,8 +71,8 @@ _KNOWN_SKILL_CASING = {
 }
 
 
-def _get_portfolio_repo() -> str:
-    return os.environ["PORTFOLIO_REPO"]
+def _get_portfolio_repo() -> str | None:
+    return config.get_portfolio_repo()
 
 
 def _load_projects(portfolio_repo: str) -> list[dict[str, Any]]:
@@ -144,11 +152,20 @@ def publish(
     decision: dict[str, Any],
     post_package: dict[str, Any],
     delivery_id: str,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     """Adds or edits this repo's card in the portfolio repo's projects.json,
-    opens a PR, backfills Firestore, and returns {url, number}. May raise.
+    opens a PR, backfills Firestore, and returns {url, number, portfolio_repo}.
+
+    Returns None — logged at INFO, not an error — if no portfolio repo is
+    configured (Firestore config/portfolio and the PORTFOLIO_REPO env var
+    are both absent). That's an expected state for a user who hasn't set up
+    the picker yet, not a failure; real GitHub/network errors still raise.
     """
     portfolio_repo = _get_portfolio_repo()
+    if portfolio_repo is None:
+        logger.info("No portfolio configured for %s — skipping portfolio publish", repo)
+        return None
+
     now_iso = datetime.now(timezone.utc).isoformat()
     card = _build_card(repo, profile, decision, post_package, now_iso)
 
@@ -200,4 +217,4 @@ def publish(
         },
     )
 
-    return {"url": pr_url, "number": _parse_pr_number(pr_url)}
+    return {"url": pr_url, "number": _parse_pr_number(pr_url), "portfolio_repo": portfolio_repo}
