@@ -33,6 +33,8 @@ function switchTab(tabName) {
 
 // Expose functions globally on window
 window.switchTab = switchTab;
+window.connectPortfolioRepo = connectPortfolioRepo;
+window.editPortfolioRepo = editPortfolioRepo;
 
 function applyHashRoute() {
     const hash = window.location.hash.replace("#", "");
@@ -45,8 +47,68 @@ function applyHashRoute() {
 
 window.addEventListener("hashchange", applyHashRoute);
 
+// ── Portfolio Repo Connector ────────────────────────────────
+function parseRepoSlug(input) {
+    if (!input) return "";
+    let clean = input.trim().replace(/^https?:\/\/github\.com\//i, "").replace(/\/$/, "").replace(/\.git$/i, "");
+    const parts = clean.split("/").filter(Boolean);
+    if (parts.length >= 2) {
+        return `${parts[0]}/${parts[1]}`;
+    }
+    return clean;
+}
+
+function loadConnectedPortfolioRepo() {
+    const saved = localStorage.getItem("launchpad_portfolio_repo") || "AmeyaSingh23/personal-portfolio";
+    const inputWrapper = document.getElementById("repo-input-wrapper");
+    const connectedState = document.getElementById("repo-connected-state");
+    const nameDisplay = document.getElementById("portfolio-target-name");
+    const inputEl = document.getElementById("portfolio-repo-input");
+
+    if (saved && nameDisplay && inputWrapper && connectedState) {
+        nameDisplay.textContent = saved;
+        inputWrapper.style.display = "none";
+        connectedState.style.display = "flex";
+        if (inputEl) inputEl.value = saved;
+    } else if (inputWrapper && connectedState) {
+        inputWrapper.style.display = "flex";
+        connectedState.style.display = "none";
+    }
+}
+
+function connectPortfolioRepo() {
+    const inputEl = document.getElementById("portfolio-repo-input");
+    if (!inputEl) return;
+    const slug = parseRepoSlug(inputEl.value);
+
+    if (!slug || !slug.includes("/")) {
+        showToast("Please enter a valid repo (e.g. username/portfolio or GitHub URL)");
+        return;
+    }
+
+    localStorage.setItem("launchpad_portfolio_repo", slug);
+    loadConnectedPortfolioRepo();
+    showToast(`Connected ${slug} as target portfolio repo!`);
+}
+
+function editPortfolioRepo() {
+    const inputWrapper = document.getElementById("repo-input-wrapper");
+    const connectedState = document.getElementById("repo-connected-state");
+    const inputEl = document.getElementById("portfolio-repo-input");
+
+    if (inputWrapper && connectedState) {
+        inputWrapper.style.display = "flex";
+        connectedState.style.display = "none";
+        if (inputEl) {
+            inputEl.focus();
+            inputEl.select();
+        }
+    }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     applyHashRoute();
+    loadConnectedPortfolioRepo();
 
     // Initial data fetch
     loadDecisions();
