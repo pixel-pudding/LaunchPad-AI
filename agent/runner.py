@@ -203,7 +203,7 @@ def run_agent(event: dict) -> dict:
         # signal the same way Tier 2 always sets it.
         if pr_number is not None:
             artifacts["portfolio_pr_merged"] = False
-            if pr_mode == "convention" and not pr_auto_merge_suppressed and config.get_portfolio_auto_merge():
+            if not pr_auto_merge_suppressed and config.get_portfolio_auto_merge():
                 try:
                     merge_result = github_merge_pr(pr_repo, pr_number)
                     artifacts["portfolio_pr_merged"] = merge_result["merged"]
