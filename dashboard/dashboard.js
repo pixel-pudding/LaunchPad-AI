@@ -169,25 +169,28 @@ async function loadLatestPost() {
 function renderPostCard(post) {
     const empty = document.getElementById("post-card-empty");
     const content = document.getElementById("post-card-content");
+    const repoEl = document.getElementById("post-repo");
+    const badge = document.getElementById("post-action-badge");
 
     if (!post || !post.post_package || Object.keys(post.post_package).length === 0) {
-        empty.style.display = "block";
-        content.style.display = "none";
+        if (empty) empty.style.display = "block";
+        if (content) content.style.display = "none";
+        if (repoEl) repoEl.textContent = "";
+        if (badge) badge.style.display = "none";
         return;
     }
 
-    empty.style.display = "none";
-    content.style.display = "block";
+    if (empty) empty.style.display = "none";
+    if (content) content.style.display = "block";
 
     currentPostPackage = post;
     const pkg = post.post_package;
 
     // Repo name + badge
-    const repoEl = document.getElementById("post-repo");
     if (repoEl) repoEl.textContent = post.repo || "";
 
-    const badge = document.getElementById("post-action-badge");
     if (badge) {
+        badge.style.display = "inline-block";
         badge.textContent = (post.action || "READY").toUpperCase();
         badge.className = `decision-badge font-mono-lp badge-${post.action || "feature_new"}`;
     }
