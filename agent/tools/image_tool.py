@@ -44,7 +44,7 @@ def resolve_project_image(repo: str, profile: dict[str, Any] | None = None) -> s
     # Tier 2: Live Deployment Snapshot (if demo_url exists)
     demo_url = profile.get("demo_url", "")
     if demo_url and (demo_url.startswith("http://") or demo_url.startswith("https://")):
-        return f"https://image.thum.io/get/width/800/crop/600/{demo_url}"
+        return f"https://image.thum.io/get/width/1200/{demo_url}"
 
     # Tier 3: GitHub OpenGraph Social Card (100% reliable for all repos)
     if "/" in repo:
