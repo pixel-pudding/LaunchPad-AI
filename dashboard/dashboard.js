@@ -1,9 +1,21 @@
-/* ── LaunchPad-AI Dashboard JavaScript ─────────────────────── */
-/* Fetches /api/decisions and /api/latest-post, renders the UI. */
+/* ── LaunchPad AI — Dashboard Application Logic ─────────────────────── */
+/* Handles tab switching, dynamic polling, decision logs, and post sharing. */
+
+let currentPostPackage = null;
 
 document.addEventListener("DOMContentLoaded", () => {
+    // Handle URL hash on initial load (#overview or #dashboard)
+    const hash = window.location.hash.replace("#", "");
+    if (hash === "dashboard") {
+        switchTab("dashboard");
+    } else {
+        switchTab("landing");
+    }
+
+    // Initial data fetch
     loadDecisions();
     loadLatestPost();
+
     // Auto-refresh every 30 seconds
     setInterval(() => {
         loadDecisions();
@@ -11,81 +23,115 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 30000);
 });
 
+// ── Tab Switching Navigation ────────────────────────────────
+function switchTab(tabName) {
+    const landingView = document.getElementById("view-landing");
+    const dashboardView = document.getElementById("view-dashboard");
+    const landingTabBtn = document.getElementById("tab-btn-landing");
+    const dashboardTabBtn = document.getElementById("tab-btn-dashboard");
 
-// ── Decision Log ────────────────────────────────────────────
+    if (tabName === "dashboard") {
+        landingView.style.display = "none";
+        dashboardView.style.display = "block";
+        landingTabBtn.classList.remove("active");
+        dashboardTabBtn.classList.add("active");
+        window.location.hash = "dashboard";
+    } else {
+        landingView.style.display = "block";
+        dashboardView.style.display = "none";
+        landingTabBtn.classList.add("active");
+        dashboardTabBtn.classList.remove("active");
+        window.location.hash = "overview";
+    }
+}
 
+// ── Decision Log Fetching & Rendering ─────────────────────────
 async function loadDecisions() {
     try {
         const resp = await fetch("/api/decisions");
+        if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
         const decisions = await resp.json();
         renderDecisions(decisions);
     } catch (err) {
-        console.error("Failed to load decisions:", err);
+        console.error("Failed to fetch decisions:", err);
     }
 }
 
 function renderDecisions(decisions) {
     const container = document.getElementById("decision-log");
-    const empty = document.getElementById("decision-log-empty");
+    const emptyState = document.getElementById("decision-log-empty");
+    const countPill = document.getElementById("nav-decisions-count");
 
     if (!decisions || decisions.length === 0) {
-        empty.style.display = "block";
+        emptyState.style.display = "block";
+        if (countPill) countPill.textContent = "0";
         return;
     }
-    empty.style.display = "none";
 
-    // Clear previous items (keep the empty placeholder)
-    container.querySelectorAll(".decision-item").forEach(el => el.remove());
+    emptyState.style.display = "none";
+    if (countPill) countPill.textContent = decisions.length.toString();
+
+    // Update last sync time
+    const syncText = document.getElementById("dash-last-event-text");
+    if (syncText && decisions[0] && decisions[0].ts) {
+        syncText.textContent = formatRelativeTime(decisions[0].ts);
+    }
+
+    // Clear previous items
+    container.innerHTML = "";
 
     decisions.forEach(d => {
         const item = document.createElement("div");
-        item.className = "decision-item";
+        item.className = "decision-row-item";
 
-        const action = d.action || "unknown";
+        const action = d.action || "skip";
         const badgeClass = `badge-${action}`;
-        const ts = d.ts ? formatTimestamp(d.ts) : "";
-        const repo = d.repo || "unknown";
-        const reasoning = d.reasoning || "No reasoning provided.";
+        const tsFormatted = d.ts ? formatTimestamp(d.ts) : "";
+        const repo = d.repo || "unknown/repo";
+        const tag = d.tag ? `v${d.tag.replace(/^v/, "")}` : "";
+        const reasoning = d.reasoning || "No evaluation reasoning provided.";
 
+        // Highlights
         let highlightsHtml = "";
         if (d.highlights && d.highlights.length > 0) {
             highlightsHtml = `
-                <div class="decision-highlights">
-                    ${d.highlights.map(h => `<span class="highlight-chip">${escapeHtml(h)}</span>`).join("")}
+                <div class="decision-highlights-wrap font-mono-lp">
+                    ${d.highlights.map(h => `<span class="highlight-tag">${escapeHtml(h)}</span>`).join("")}
                 </div>
             `;
         }
 
+        // Links (PRs)
         let linksHtml = "";
         const artifacts = d.artifacts || {};
         const links = [];
-        if (artifacts.readme_pr) links.push({ label: "📄 README PR", url: artifacts.readme_pr });
-        if (artifacts.portfolio_pr) links.push({ label: "🖼️ Portfolio PR", url: artifacts.portfolio_pr });
-        if (d.gap) links.push({ label: `⚠️ Gap: ${d.gap}`, url: null });
+        if (artifacts.readme_pr) {
+            links.push(`<a class="pr-link-chip font-mono-lp" href="${escapeHtml(artifacts.readme_pr)}" target="_blank" rel="noopener">📄 README PR</a>`);
+        }
+        if (artifacts.portfolio_pr) {
+            const isMerged = artifacts.portfolio_pr_merged ? `<span class="pr-merged-indicator font-mono-lp">AUTO-MERGED</span>` : "";
+            links.push(`<a class="pr-link-chip font-mono-lp" href="${escapeHtml(artifacts.portfolio_pr)}" target="_blank" rel="noopener">🖼️ Portfolio PR ${isMerged}</a>`);
+        }
 
         if (links.length > 0) {
-            linksHtml = `
-                <div class="decision-links">
-                    ${links.map(l => l.url
-                        ? `<a class="decision-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener">${l.label}</a>`
-                        : `<span class="decision-link" style="cursor:default;">${l.label}</span>`
-                    ).join("")}
-                </div>
-            `;
+            linksHtml = `<div class="decision-links-row">${links.join("")}</div>`;
         }
 
         item.innerHTML = `
-            <div class="decision-header">
-                <span class="decision-repo">${escapeHtml(repo)}</span>
-                <span class="decision-time">${ts}</span>
-            </div>
-            <div class="decision-body">
-                <span class="decision-action-badge ${badgeClass}">${escapeHtml(action.replace("_", " "))}</span>
-                <div>
-                    <div class="decision-reasoning">${escapeHtml(reasoning)}</div>
-                    ${highlightsHtml}
-                    ${linksHtml}
+            <div class="decision-row-top">
+                <div class="decision-repo-title">
+                    <span>${escapeHtml(repo)}</span>
+                    ${tag ? `<span class="decision-version-tag font-mono-lp">${escapeHtml(tag)}</span>` : ""}
                 </div>
+                <span class="decision-meta-time font-mono-lp">${escapeHtml(tsFormatted)}</span>
+            </div>
+            <div class="decision-row-body">
+                <div class="decision-action-wrap">
+                    <span class="decision-badge font-mono-lp ${badgeClass}">${escapeHtml(action)}</span>
+                </div>
+                <div class="decision-reasoning-text">${escapeHtml(reasoning)}</div>
+                ${highlightsHtml}
+                ${linksHtml}
             </div>
         `;
 
@@ -93,17 +139,16 @@ function renderDecisions(decisions) {
     });
 }
 
-
-// ── Post Review Card ────────────────────────────────────────
-
+// ── Post Review Card Fetching & Rendering ─────────────────────
 async function loadLatestPost() {
     try {
         const resp = await fetch("/api/latest-post");
+        if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
         const post = await resp.json();
         renderPostCard(post);
         renderNextBuilds(post);
     } catch (err) {
-        console.error("Failed to load latest post:", err);
+        console.error("Failed to fetch latest post:", err);
     }
 }
 
@@ -120,19 +165,40 @@ function renderPostCard(post) {
     empty.style.display = "none";
     content.style.display = "block";
 
+    currentPostPackage = post;
     const pkg = post.post_package;
 
     // Repo name + badge
-    document.getElementById("post-repo").textContent = post.repo || "";
+    const repoEl = document.getElementById("post-repo");
+    if (repoEl) repoEl.textContent = post.repo || "";
+
     const badge = document.getElementById("post-action-badge");
-    badge.textContent = (post.action || "").replace("_", " ");
-    badge.className = `post-action-badge badge-${post.action || "unknown"}`;
+    if (badge) {
+        badge.textContent = (post.action || "READY").toUpperCase();
+        badge.className = `decision-badge font-mono-lp badge-${post.action || "feature_new"}`;
+    }
 
-    // Reasoning
-    document.getElementById("post-reasoning").textContent = post.reasoning || "";
+    // Reasoning quote
+    const reasoningEl = document.getElementById("post-reasoning");
+    if (reasoningEl) {
+        reasoningEl.textContent = post.reasoning ? `"${post.reasoning}"` : "";
+    }
 
-    // Post text
-    document.getElementById("post-text").textContent = pkg.text || "";
+    // Post body text
+    const textEl = document.getElementById("post-text");
+    if (textEl) {
+        textEl.textContent = pkg.text || "Draft content being generated...";
+    }
+
+    // Generated Image Banner
+    const imgContainer = document.getElementById("post-image-container");
+    const imgEl = document.getElementById("post-image");
+    if (pkg.image_url) {
+        imgEl.src = pkg.image_url;
+        imgContainer.style.display = "block";
+    } else {
+        imgContainer.style.display = "none";
+    }
 
     // Hashtags
     const hashtagsEl = document.getElementById("post-hashtags");
@@ -140,53 +206,36 @@ function renderPostCard(post) {
     if (pkg.hashtags && pkg.hashtags.length > 0) {
         pkg.hashtags.forEach(tag => {
             const chip = document.createElement("span");
-            chip.className = "hashtag";
+            chip.className = "post-hashtag-chip font-mono-lp";
             chip.textContent = tag.startsWith("#") ? tag : `#${tag}`;
             hashtagsEl.appendChild(chip);
         });
     }
 
-    // Image
-    const imgContainer = document.getElementById("post-image-container");
-    if (pkg.image_url) {
-        document.getElementById("post-image").src = pkg.image_url;
-        imgContainer.style.display = "block";
-    } else {
-        imgContainer.style.display = "none";
-    }
-
-    // LinkedIn button: copy to clipboard + open composer
-    const linkedinBtn = document.getElementById("btn-linkedin");
-    linkedinBtn.onclick = (e) => {
-        e.preventDefault();
-        const fullText = (pkg.text || "") + "\n\n" +
-            (pkg.hashtags || []).map(t => t.startsWith("#") ? t : `#${t}`).join(" ");
-        navigator.clipboard.writeText(fullText).then(() => {
-            showToast("Copied! Paste into the LinkedIn composer.");
-            window.open("https://www.linkedin.com/feed/?shareActive=true", "_blank");
-        }).catch(() => {
-            showToast("Copy failed — select and copy manually.");
-            window.open("https://www.linkedin.com/feed/?shareActive=true", "_blank");
-        });
-    };
-
-    // Links (PRs)
+    // PR Links
     const linksEl = document.getElementById("post-links");
     linksEl.innerHTML = "";
-    if (post.readme_pr) {
-        linksEl.innerHTML += `<a class="post-link" href="${escapeHtml(post.readme_pr)}" target="_blank" rel="noopener">📄 README PR</a>`;
-    }
     if (post.portfolio_pr) {
-        linksEl.innerHTML += `<a class="post-link" href="${escapeHtml(post.portfolio_pr)}" target="_blank" rel="noopener">🖼️ Portfolio PR</a>`;
+        linksEl.innerHTML += `
+            <a class="pr-link-chip font-mono-lp" href="${escapeHtml(post.portfolio_pr)}" target="_blank" rel="noopener">
+                🖼️ View Portfolio PR ↗
+            </a>
+        `;
+    }
+    if (post.readme_pr) {
+        linksEl.innerHTML += `
+            <a class="pr-link-chip font-mono-lp" href="${escapeHtml(post.readme_pr)}" target="_blank" rel="noopener">
+                📄 View README PR ↗
+            </a>
+        `;
     }
 }
 
-
-// ── Next Builds Footnote Card ───────────────────────────────
-
+// ── Next Builds Footnote Card ─────────────────────────────────
 function renderNextBuilds(post) {
     const section = document.getElementById("next-builds-section");
-    if (!section) return;
+    const listEl = document.getElementById("next-builds-list");
+    if (!section || !listEl) return;
 
     const nextBuilds = (post && post.next_builds) || [];
 
@@ -196,74 +245,118 @@ function renderNextBuilds(post) {
     }
 
     section.style.display = "block";
-    section.innerHTML = `
-        <div class="next-builds-card">
-            <h3 class="next-builds-title">🔮 Next builds to grow your portfolio</h3>
-            <ul class="next-builds-list">
-                ${nextBuilds.map(b => `
-                    <li class="next-build-item">
-                        <span class="next-build-name">${escapeHtml(b.title || "")}</span>
-                        <span class="next-build-reason">${escapeHtml(b.one_line_reason || "")}</span>
-                    </li>
-                `).join("")}
-            </ul>
-        </div>
-    `;
+    listEl.innerHTML = nextBuilds.map((item, idx) => {
+        const numStr = String(idx + 1).padStart(2, "0");
+        const title = item.title || item.text || "";
+        const reason = item.one_line_reason || item.reason || "";
+        return `
+            <li class="next-build-item">
+                <span class="next-build-num font-mono-lp">${numStr}</span>
+                <div class="next-build-content">
+                    <p><strong>${escapeHtml(title)}</strong> — ${escapeHtml(reason)}</p>
+                    <span class="next-build-gap-chip font-mono-lp">SKILL GAP RECOMMENDATION</span>
+                </div>
+            </li>
+        `;
+    }).join("");
 }
 
-
-// ── Utilities ───────────────────────────────────────────────
-
+// ── Copy Post & Open LinkedIn Composer ─────────────────────────
 function copyPostContent() {
-    const text = document.getElementById("post-text").textContent;
-    const hashtags = Array.from(document.querySelectorAll(".hashtag"))
-        .map(el => el.textContent)
-        .join(" ");
-    const full = text + "\n\n" + hashtags;
+    if (!currentPostPackage || !currentPostPackage.post_package) {
+        showToast("No active post draft to copy.");
+        return;
+    }
 
-    navigator.clipboard.writeText(full).then(() => {
-        showToast("Copied to clipboard!");
+    const pkg = currentPostPackage.post_package;
+    const text = pkg.text || "";
+    const hashtags = (pkg.hashtags || []).map(t => t.startsWith("#") ? t : `#${t}`).join(" ");
+    const fullContent = hashtags ? `${text}\n\n${hashtags}` : text;
+
+    navigator.clipboard.writeText(fullContent).then(() => {
+        showToast("Copied post! Opening LinkedIn composer...");
         const btn = document.getElementById("btn-copy");
-        btn.textContent = "✅ Copied!";
-        btn.classList.add("copied");
-        setTimeout(() => {
-            btn.textContent = "📋 Copy All";
-            btn.classList.remove("copied");
-        }, 2000);
+        if (btn) {
+            btn.textContent = "✓ Copied to clipboard!";
+            btn.classList.add("copied");
+            setTimeout(() => {
+                btn.textContent = "📋 Copy post & Open LinkedIn";
+                btn.classList.remove("copied");
+            }, 2500);
+        }
+        // Open LinkedIn feed with active share modal
+        window.open("https://www.linkedin.com/feed/?shareActive=true", "_blank");
     }).catch(err => {
-        console.error("Copy failed:", err);
-        showToast("Copy failed — try selecting manually.");
+        console.error("Clipboard copy failed:", err);
+        showToast("Copy failed — please select and copy text manually.");
+        window.open("https://www.linkedin.com/feed/?shareActive=true", "_blank");
     });
 }
 
+function editPostContent() {
+    const textEl = document.getElementById("post-text");
+    if (!textEl) return;
+    const isEditing = textEl.getAttribute("contenteditable") === "true";
+    if (isEditing) {
+        textEl.setAttribute("contenteditable", "false");
+        textEl.style.border = "1px solid var(--border-base)";
+        showToast("Draft updated!");
+    } else {
+        textEl.setAttribute("contenteditable", "true");
+        textEl.focus();
+        textEl.style.border = "1px solid var(--accent-sage)";
+        showToast("You can now edit the post directly.");
+    }
+}
+
+// ── Helpers & Formatting ──────────────────────────────────────
 function showToast(message) {
-    let toast = document.querySelector(".toast");
+    let toast = document.getElementById("global-toast");
     if (!toast) {
         toast = document.createElement("div");
-        toast.className = "toast";
+        toast.id = "global-toast";
+        toast.className = "toast font-mono-lp";
         document.body.appendChild(toast);
     }
     toast.textContent = message;
     toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), 2500);
+    setTimeout(() => toast.classList.remove("show"), 3000);
 }
 
 function formatTimestamp(ts) {
     try {
         const d = new Date(ts);
-        return d.toLocaleString("en-IN", {
-            day: "numeric",
+        return d.toLocaleDateString("en-US", {
             month: "short",
+            day: "numeric",
             hour: "2-digit",
             minute: "2-digit",
-            hour12: true,
-        });
+            hour12: false
+        }) + " UTC";
     } catch {
         return ts;
     }
 }
 
+function formatRelativeTime(ts) {
+    try {
+        const now = new Date();
+        const past = new Date(ts);
+        const diffMs = now - past;
+        const diffMins = Math.floor(diffMs / (1000 * 60));
+        if (diffMins < 1) return "just now";
+        if (diffMins < 60) return `${diffMins}m ago`;
+        const diffHours = Math.floor(diffMins / 60);
+        if (diffHours < 24) return `${diffHours}h ago`;
+        const diffDays = Math.floor(diffHours / 24);
+        return `${diffDays}d ago`;
+    } catch {
+        return "recently";
+    }
+}
+
 function escapeHtml(str) {
+    if (!str) return "";
     const div = document.createElement("div");
     div.textContent = str;
     return div.innerHTML;
