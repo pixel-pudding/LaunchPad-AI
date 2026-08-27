@@ -15,6 +15,13 @@ how to degrade, matching content_writer/image_tool/self_reviewer. A failure
 here must never touch artifacts.post_package, which is why this only ever
 adds artifacts.portfolio_pr and never rewrites keys other steps own.
 
+publish() returns {url, number} rather than a bare URL string, so runner.py
+can auto-merge this exact PR afterward (see runner.py) without needing a
+second API round-trip to look the number up. The PR number is parsed off
+the URL github_open_pr already returns rather than changing that function's
+return type, since github_open_pr's `-> str` signature is part of the
+frozen CLAUDE.md contract.
+
 Alongside the project card, publish() also merges this release's real
 stack/languages into skills.json — a flat JSON array at the portfolio
 repo's root — in the SAME PR (github_open_pr already commits every path in
@@ -126,15 +133,20 @@ def _build_card(
     }
 
 
+def _parse_pr_number(pr_url: str) -> int:
+    """Extracts the PR number from a GitHub PR URL (.../pull/{number})."""
+    return int(pr_url.rstrip("/").rsplit("/", 1)[-1])
+
+
 def publish(
     repo: str,
     profile: dict[str, Any],
     decision: dict[str, Any],
     post_package: dict[str, Any],
     delivery_id: str,
-) -> str:
+) -> dict[str, Any]:
     """Adds or edits this repo's card in the portfolio repo's projects.json,
-    opens a PR, backfills Firestore, and returns the PR URL. May raise.
+    opens a PR, backfills Firestore, and returns {url, number}. May raise.
     """
     portfolio_repo = _get_portfolio_repo()
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -188,4 +200,4 @@ def publish(
         },
     )
 
-    return pr_url
+    return {"url": pr_url, "number": _parse_pr_number(pr_url)}
