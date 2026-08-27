@@ -147,9 +147,30 @@ def github_get_repo(repo: str) -> dict[str, Any]:
     }
 
 
+def github_get_file(repo: str, path: str, ref: str | None = None) -> str | None:
+    """Fetches a file's raw text content from `repo` at `path` (optionally at
+    a specific ref/branch). Returns None if the file doesn't exist (404).
+    """
+    headers = _auth_headers()
+    params = {"ref": ref} if ref else {}
+    resp = requests.get(
+        f"{_GITHUB_API}/repos/{repo}/contents/{path}", headers=headers, params=params, timeout=10
+    )
+    if resp.status_code == 404:
+        return None
+    resp.raise_for_status()
+    content = resp.json().get("content", "")
+    return base64.b64decode(content).decode("utf-8", errors="replace")
+
+
 def github_open_pr(repo: str, branch: str, title: str, body: str, files: dict[str, str]) -> str:
     """Creates `branch` off the default branch, commits `files` (path -> content)
     onto it, and opens a PR into the default branch. Returns the PR URL.
+
+    Each file is created or updated as appropriate: GitHub's Contents API
+    requires the current file's `sha` to overwrite an existing file (and
+    rejects it entirely for a brand-new one), so each path is checked on the
+    new branch first.
     """
     headers = _auth_headers()
 
@@ -172,15 +193,22 @@ def github_open_pr(repo: str, branch: str, title: str, body: str, files: dict[st
     branch_resp.raise_for_status()
 
     for path, content in files.items():
-        put_resp = requests.put(
+        existing_resp = requests.get(
             f"{_GITHUB_API}/repos/{repo}/contents/{path}",
             headers=headers,
-            json={
-                "message": f"LaunchPad-AI: update {path}",
-                "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
-                "branch": branch,
-            },
+            params={"ref": branch},
             timeout=10,
+        )
+        payload = {
+            "message": f"LaunchPad-AI: update {path}",
+            "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+            "branch": branch,
+        }
+        if existing_resp.status_code == 200:
+            payload["sha"] = existing_resp.json()["sha"]
+
+        put_resp = requests.put(
+            f"{_GITHUB_API}/repos/{repo}/contents/{path}", headers=headers, json=payload, timeout=10
         )
         put_resp.raise_for_status()
 
