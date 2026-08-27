@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 from google.cloud import firestore
 
-from agent import memory
+from agent import config, memory
 from agent.subagents.announcer import assemble_post_package
 from agent.subagents.content_writer import write_content
 from agent.subagents.next_build_suggester import suggest_next_builds
@@ -22,6 +22,7 @@ from agent.subagents.portfolio_publisher import publish as publish_to_portfolio
 from agent.subagents.relevance_curator import curate
 from agent.subagents.release_analyst import analyze_release
 from agent.subagents.self_reviewer import review as run_self_review
+from agent.tools.github_tool import github_merge_pr
 from agent.tools.image_tool import generate_image
 
 logger = logging.getLogger(__name__)
@@ -47,11 +48,13 @@ def run_agent(event: dict) -> dict:
     content_writer -> generate_image -> announcer -> self_reviewer (only if
     a post_package exists to review) -> portfolio_publisher (runs
     regardless of whether the post pipeline succeeded — the portfolio card
-    is an independent artifact) -> next_build_suggester (a pure, secondary
-    byproduct — reads only already-fetched memory, writes only its own
-    artifacts key, never influences the decision/post/PR), each failing
-    gracefully: log and continue/skip rather than crash the webhook] ->
-    save decision -> mark processed -> return.
+    is an independent artifact) -> auto-merge the PR just opened (own
+    try/except, gated by config.PORTFOLIO_AUTO_MERGE; a merge failure
+    leaves the PR open rather than losing it) -> next_build_suggester (a
+    pure, secondary byproduct — reads only already-fetched memory, writes
+    only its own artifacts key, never influences the decision/post/PR),
+    each failing gracefully: log and continue/skip rather than crash the
+    webhook] -> save decision -> mark processed -> return.
     """
     delivery_id = event.get("delivery_id", "")
     repo = event.get("repo", "")
@@ -137,16 +140,39 @@ def run_agent(event: dict) -> dict:
                     exc_info=True,
                 )
 
+        pr_number = None
         try:
-            artifacts["portfolio_pr"] = publish_to_portfolio(
+            pr = publish_to_portfolio(
                 repo, profile, decision, artifacts.get("post_package", {}), delivery_id
             )
+            artifacts["portfolio_pr"] = pr["url"]
+            pr_number = pr["number"]
         except Exception:
             logger.error(
                 "portfolio_publisher failed for delivery=%s — post package (if any) is unaffected",
                 delivery_id,
                 exc_info=True,
             )
+
+        # Separate try/except from opening the PR above: opening and
+        # merging are independent outcomes. A merge failure (branch
+        # protection, conflicts, permissions) must never lose the
+        # already-open PR or the post_package built earlier. Only ever
+        # merges the exact PR this run just opened — never looks up or
+        # touches any other PR.
+        if pr_number is not None:
+            artifacts["portfolio_pr_merged"] = False
+            if config.PORTFOLIO_AUTO_MERGE:
+                try:
+                    merge_result = github_merge_pr(repo, pr_number)
+                    artifacts["portfolio_pr_merged"] = merge_result["merged"]
+                    artifacts["portfolio_pr_sha"] = merge_result["sha"]
+                except Exception:
+                    logger.error(
+                        "auto-merge failed for delivery=%s — PR left open for manual merge",
+                        delivery_id,
+                        exc_info=True,
+                    )
 
         # Pure byproduct, last step: reads only the already-fetched
         # memory_context, writes only its own artifacts key. A failure here
