@@ -48,8 +48,10 @@ def run_agent(event: dict) -> dict:
     content_writer -> generate_image -> announcer -> self_reviewer (only if
     a post_package exists to review) -> portfolio_publisher (runs
     regardless of whether the post pipeline succeeded — the portfolio card
-    is an independent artifact) -> auto-merge the PR just opened (own
-    try/except, gated by config.PORTFOLIO_AUTO_MERGE; a merge failure
+    is an independent artifact; returns None, not an error, if no portfolio
+    repo is configured yet via config.get_portfolio_repo()) -> auto-merge
+    the PR just opened, on the repo it was actually opened on (own
+    try/except, gated by config.get_portfolio_auto_merge(); a merge failure
     leaves the PR open rather than losing it) -> next_build_suggester (a
     pure, secondary byproduct — reads only already-fetched memory, writes
     only its own artifacts key, never influences the decision/post/PR),
@@ -147,12 +149,18 @@ def run_agent(event: dict) -> dict:
                 )
 
         pr_number = None
+        pr_repo = None
         try:
             pr = publish_to_portfolio(
                 repo, profile, decision, artifacts.get("post_package", {}), delivery_id
             )
-            artifacts["portfolio_pr"] = pr["url"]
-            pr_number = pr["number"]
+            # publish() returns None (not an exception) when no portfolio
+            # repo is configured yet — an expected state, already logged
+            # at INFO inside portfolio_publisher. Nothing to merge either.
+            if pr is not None:
+                artifacts["portfolio_pr"] = pr["url"]
+                pr_number = pr["number"]
+                pr_repo = pr["portfolio_repo"]
         except Exception:
             logger.error(
                 "portfolio_publisher failed for delivery=%s — post package (if any) is unaffected",
@@ -164,13 +172,15 @@ def run_agent(event: dict) -> dict:
         # merging are independent outcomes. A merge failure (branch
         # protection, conflicts, permissions) must never lose the
         # already-open PR or the post_package built earlier. Only ever
-        # merges the exact PR this run just opened — never looks up or
-        # touches any other PR.
+        # merges the exact PR this run just opened, on the repo it was
+        # actually opened on (pr_repo — the portfolio repo, NOT `repo`,
+        # which is the source release repo the webhook fired for) —
+        # never looks up or touches any other PR.
         if pr_number is not None:
             artifacts["portfolio_pr_merged"] = False
-            if config.PORTFOLIO_AUTO_MERGE:
+            if config.get_portfolio_auto_merge():
                 try:
-                    merge_result = github_merge_pr(repo, pr_number)
+                    merge_result = github_merge_pr(pr_repo, pr_number)
                     artifacts["portfolio_pr_merged"] = merge_result["merged"]
                     artifacts["portfolio_pr_sha"] = merge_result["sha"]
                 except Exception:

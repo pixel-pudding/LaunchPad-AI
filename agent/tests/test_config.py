@@ -44,3 +44,61 @@ def test_rejects_vertex_ai_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_accepts_vertex_ai_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "1")
     config.check_vertex_ai_enabled()  # must not raise
+
+
+# get_portfolio_repo/get_portfolio_auto_merge lazily do `from agent import
+# memory` inside the function body, then call `memory.get_portfolio_config()`
+# — an attribute lookup at call time, not an import-time binding — so
+# patching `memory.get_portfolio_config` directly is what actually takes
+# effect here (same reasoning as everywhere else in this codebase).
+
+
+def test_get_portfolio_repo_prefers_firestore_over_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    from agent import memory
+
+    monkeypatch.setenv("PORTFOLIO_REPO", "owner/env-repo")
+    monkeypatch.setattr(
+        memory, "get_portfolio_config", lambda client=None: {"portfolio_repo": "owner/firestore-repo"}
+    )
+
+    assert config.get_portfolio_repo() == "owner/firestore-repo"
+
+
+def test_get_portfolio_repo_falls_back_to_env_when_firestore_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    from agent import memory
+
+    monkeypatch.setenv("PORTFOLIO_REPO", "owner/env-repo")
+    monkeypatch.setattr(memory, "get_portfolio_config", lambda client=None: None)
+
+    assert config.get_portfolio_repo() == "owner/env-repo"
+
+
+def test_get_portfolio_repo_returns_none_when_neither_is_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    from agent import memory
+
+    monkeypatch.delenv("PORTFOLIO_REPO", raising=False)
+    monkeypatch.setattr(memory, "get_portfolio_config", lambda client=None: None)
+
+    assert config.get_portfolio_repo() is None
+
+
+def test_get_portfolio_auto_merge_prefers_firestore_over_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    from agent import memory
+
+    monkeypatch.setattr(config, "PORTFOLIO_AUTO_MERGE", True)
+    monkeypatch.setattr(
+        memory,
+        "get_portfolio_config",
+        lambda client=None: {"portfolio_repo": "owner/repo", "auto_merge": False},
+    )
+
+    assert config.get_portfolio_auto_merge() is False
+
+
+def test_get_portfolio_auto_merge_falls_back_to_env_constant(monkeypatch: pytest.MonkeyPatch) -> None:
+    from agent import memory
+
+    monkeypatch.setattr(config, "PORTFOLIO_AUTO_MERGE", True)
+    monkeypatch.setattr(memory, "get_portfolio_config", lambda client=None: None)
+
+    assert config.get_portfolio_auto_merge() is True
