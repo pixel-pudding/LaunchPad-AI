@@ -1,20 +1,22 @@
 """
-LaunchPad-AI — unit tests for the full content + publishing wiring in
-agent/runner.py.
+LaunchPad-AI — unit tests for the full content + publishing + next-build
+wiring in agent/runner.py.
 
 No live network: release_analyst/relevance_curator/content_writer/
-image_tool/self_reviewer/portfolio_publisher and the memory accessors are
-all monkeypatched. The functions runner.py imports by name are patched as
-`runner.<name>` — patching the originating module (e.g.
-content_writer.write_content) would have no effect, since `from x import y`
-binds a separate reference into runner's own namespace at import time.
-memory.* is patched on the memory module itself, since runner.py calls
-those via `memory.<name>(...)` attribute access.
+image_tool/self_reviewer/portfolio_publisher/next_build_suggester and the
+memory accessors are all monkeypatched. The functions runner.py imports by
+name are patched as `runner.<name>` — patching the originating module
+(e.g. content_writer.write_content) would have no effect, since
+`from x import y` binds a separate reference into runner's own namespace at
+import time. memory.* is patched on the memory module itself, since
+runner.py calls those via `memory.<name>(...)` attribute access.
 
-Confirms: a "skip" decision runs NONE of this (content or publishing); a
-"feature_new" decision produces a post_package in the dashboard's exact
-shape AND a portfolio PR; and a portfolio_publisher failure never loses the
-already-built post_package.
+Confirms: a "skip" decision runs NONE of this (content, publishing, or
+suggestions); a "feature_new" decision produces a post_package in the
+dashboard's exact shape, a portfolio PR, AND next-build suggestions; and a
+next_build_suggester failure leaves the decision, post_package, and
+portfolio_pr completely untouched — the isolation this feature was built
+around.
 """
 
 from __future__ import annotations
@@ -56,9 +58,9 @@ def _patch_memory(monkeypatch):
 
 
 def _patch_happy_content_pipeline(monkeypatch):
-    """Patches content_writer/image_tool/self_reviewer/portfolio_publisher
-    to a working, non-network default — individual tests override one piece
-    to exercise a failure path."""
+    """Patches content_writer/image_tool/self_reviewer/portfolio_publisher/
+    next_build_suggester to a working, non-network default — individual
+    tests override one piece to exercise a failure path."""
     monkeypatch.setattr(
         runner,
         "write_content",
@@ -82,9 +84,16 @@ def _patch_happy_content_pipeline(monkeypatch):
         "publish_to_portfolio",
         lambda repo, profile, decision, post_package, delivery_id: "https://github.com/owner/portfolio-demo/pull/1",
     )
+    monkeypatch.setattr(
+        runner,
+        "suggest_next_builds",
+        lambda featured_projects, context_profile: [
+            {"title": "Hosted API", "one_line_reason": "Extends the pipeline work."}
+        ],
+    )
 
 
-def test_skip_runs_none_of_the_content_or_publishing_pipeline(monkeypatch):
+def test_skip_runs_none_of_the_content_publishing_or_suggestion_pipeline(monkeypatch):
     saved = _patch_memory(monkeypatch)
     monkeypatch.setattr(runner, "analyze_release", lambda event: dict(_PROFILE))
     monkeypatch.setattr(
@@ -99,7 +108,13 @@ def test_skip_runs_none_of_the_content_or_publishing_pipeline(monkeypatch):
         },
     )
 
-    called = {"content_writer": False, "image_tool": False, "self_reviewer": False, "portfolio_publisher": False}
+    called = {
+        "content_writer": False,
+        "image_tool": False,
+        "self_reviewer": False,
+        "portfolio_publisher": False,
+        "next_build_suggester": False,
+    }
     monkeypatch.setattr(runner, "write_content", lambda *a, **k: called.__setitem__("content_writer", True) or {})
     monkeypatch.setattr(runner, "generate_image", lambda *a, **k: called.__setitem__("image_tool", True) or "")
     monkeypatch.setattr(
@@ -112,6 +127,11 @@ def test_skip_runs_none_of_the_content_or_publishing_pipeline(monkeypatch):
         "publish_to_portfolio",
         lambda *a, **k: called.__setitem__("portfolio_publisher", True) or "",
     )
+    monkeypatch.setattr(
+        runner,
+        "suggest_next_builds",
+        lambda *a, **k: called.__setitem__("next_build_suggester", True) or [],
+    )
 
     result = runner.run_agent({"delivery_id": "d1", "repo": "owner/repo", "tag": "v1.0"})
 
@@ -122,7 +142,7 @@ def test_skip_runs_none_of_the_content_or_publishing_pipeline(monkeypatch):
     assert saved["record"]["artifacts"] == {}
 
 
-def test_feature_new_produces_post_package_and_portfolio_pr(monkeypatch):
+def test_feature_new_produces_post_package_pr_and_suggestions(monkeypatch):
     saved = _patch_memory(monkeypatch)
     monkeypatch.setattr(runner, "analyze_release", lambda event: dict(_PROFILE))
     monkeypatch.setattr(runner, "curate", lambda profile, memory_context, delivery_id=None: dict(_FEATURE_NEW_DECISION))
@@ -138,6 +158,9 @@ def test_feature_new_produces_post_package_and_portfolio_pr(monkeypatch):
         "image_url": "data:image/svg+xml;base64,ZmFrZQ==",
     }
     assert result["artifacts"]["portfolio_pr"] == "https://github.com/owner/portfolio-demo/pull/1"
+    assert result["artifacts"]["next_builds"] == [
+        {"title": "Hosted API", "one_line_reason": "Extends the pipeline work."}
+    ]
     assert result["self_review"] == {"passed": True, "issues": [], "revised": False}
     # The Firestore-bound copy carries the real "ts" write; the returned
     # dict must stay JSON-serializable (a plain ISO string, not the
@@ -162,6 +185,7 @@ def test_content_writer_failure_degrades_to_no_post_package_but_publisher_still_
     monkeypatch.setattr(
         runner, "publish_to_portfolio", lambda *a, **k: "https://github.com/owner/portfolio-demo/pull/2"
     )
+    monkeypatch.setattr(runner, "suggest_next_builds", lambda *a, **k: [])
 
     result = runner.run_agent({"delivery_id": "d3", "repo": "owner/repo", "tag": "v1.0"})
 
@@ -197,6 +221,7 @@ def test_image_tool_failure_still_produces_post_package_without_image(monkeypatc
         lambda post_package, profile, decision, voice_profile: (post_package, {"passed": True, "issues": [], "revised": False}),
     )
     monkeypatch.setattr(runner, "publish_to_portfolio", lambda *a, **k: "https://github.com/owner/portfolio-demo/pull/3")
+    monkeypatch.setattr(runner, "suggest_next_builds", lambda *a, **k: [])
 
     result = runner.run_agent({"delivery_id": "d4", "repo": "owner/repo", "tag": "v1.0"})
 
@@ -225,6 +250,7 @@ def test_self_reviewer_failure_keeps_the_unreviewed_post_package(monkeypatch):
 
     monkeypatch.setattr(runner, "run_self_review", _boom)
     monkeypatch.setattr(runner, "publish_to_portfolio", lambda *a, **k: "https://github.com/owner/portfolio-demo/pull/4")
+    monkeypatch.setattr(runner, "suggest_next_builds", lambda *a, **k: [])
 
     result = runner.run_agent({"delivery_id": "d5", "repo": "owner/repo", "tag": "v1.0"})
 
@@ -257,6 +283,7 @@ def test_portfolio_publisher_failure_preserves_post_package(monkeypatch):
         raise RuntimeError("portfolio publisher exploded")
 
     monkeypatch.setattr(runner, "publish_to_portfolio", _boom)
+    monkeypatch.setattr(runner, "suggest_next_builds", lambda *a, **k: [])
 
     result = runner.run_agent({"delivery_id": "d6", "repo": "owner/repo", "tag": "v1.0"})
 
@@ -266,3 +293,49 @@ def test_portfolio_publisher_failure_preserves_post_package(monkeypatch):
         "image_url": "data:x",
     }
     assert "portfolio_pr" not in result["artifacts"]
+
+
+def test_next_build_suggester_failure_preserves_everything_else(monkeypatch):
+    """The specific guarantee this feature was built around: a
+    next_build_suggester failure — its own try/except, last step — must
+    leave the decision, the post_package, and the portfolio_pr completely
+    intact, and simply omit artifacts["next_builds"]."""
+    saved = _patch_memory(monkeypatch)
+    monkeypatch.setattr(runner, "analyze_release", lambda event: dict(_PROFILE))
+    monkeypatch.setattr(runner, "curate", lambda profile, memory_context, delivery_id=None: dict(_FEATURE_NEW_DECISION))
+    monkeypatch.setattr(
+        runner,
+        "write_content",
+        lambda profile, decision, voice_profile: {
+            "text": "Shipped a thing.",
+            "hashtags": ["python"],
+            "image_prompt": "a diagram",
+        },
+    )
+    monkeypatch.setattr(runner, "generate_image", lambda prompt: "data:x")
+    monkeypatch.setattr(
+        runner,
+        "run_self_review",
+        lambda post_package, profile, decision, voice_profile: (post_package, {"passed": True, "issues": [], "revised": False}),
+    )
+    monkeypatch.setattr(runner, "publish_to_portfolio", lambda *a, **k: "https://github.com/owner/portfolio-demo/pull/5")
+
+    def _boom(*a, **k):
+        raise RuntimeError("next build suggester exploded")
+
+    monkeypatch.setattr(runner, "suggest_next_builds", _boom)
+
+    result = runner.run_agent({"delivery_id": "d7", "repo": "owner/repo", "tag": "v1.0"})
+
+    assert result["action"] == "feature_new"
+    assert result["reasoning"] == _FEATURE_NEW_DECISION["reasoning"]
+    assert result["artifacts"]["post_package"] == {
+        "text": "Shipped a thing.",
+        "hashtags": ["python"],
+        "image_url": "data:x",
+    }
+    assert result["artifacts"]["portfolio_pr"] == "https://github.com/owner/portfolio-demo/pull/5"
+    assert "next_builds" not in result["artifacts"]
+    assert result["self_review"] == {"passed": True, "issues": [], "revised": False}
+    # And the Firestore-bound record matches exactly what was returned.
+    assert saved["record"]["artifacts"] == result["artifacts"]
