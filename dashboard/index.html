@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/dashboard.css">
+    <link rel="stylesheet" href="/static/dashboard.css?v=15">
 </head>
 <body>
 
@@ -29,13 +29,13 @@
 
             <!-- Tab Switcher -->
             <nav class="nav-tabs" aria-label="Main Navigation">
-                <button class="nav-tab active" id="tab-btn-landing" onclick="switchTab('landing')">
+                <a href="#overview" class="nav-tab active" id="tab-btn-landing" onclick="switchTab('landing')">
                     Overview
-                </button>
-                <button class="nav-tab" id="tab-btn-dashboard" onclick="switchTab('dashboard')">
+                </a>
+                <a href="#dashboard" class="nav-tab" id="tab-btn-dashboard" onclick="switchTab('dashboard')">
                     Live Dashboard
                     <span class="nav-tab-pill font-mono-lp" id="nav-decisions-count">0</span>
-                </button>
+                </a>
             </nav>
 
             <!-- Live Status Indicator -->
@@ -426,6 +426,6 @@
         </div>
     </footer>
 
-    <script src="/static/dashboard.js"></script>
+    <script src="/static/dashboard.js?v=15"></script>
 </body>
 </html>
