@@ -1,19 +1,20 @@
 """
-LaunchPad-AI — unit tests for the content-generation wiring in agent/runner.py.
+LaunchPad-AI — unit tests for the full content + publishing wiring in
+agent/runner.py.
 
-No live network: release_analyst/relevance_curator/content_writer/image_tool
-and the memory accessors are all monkeypatched. The functions runner.py
-imports by name (curate, analyze_release, write_content, generate_image,
-assemble_post_package) are patched as `runner.<name>` — patching the
-originating module (e.g. content_writer.write_content) would have no effect,
-since `from x import y` binds a separate reference into runner's own
-namespace at import time. memory.* is patched on the memory module itself,
-since runner.py calls those via `memory.<name>(...)` attribute access.
+No live network: release_analyst/relevance_curator/content_writer/
+image_tool/self_reviewer/portfolio_publisher and the memory accessors are
+all monkeypatched. The functions runner.py imports by name are patched as
+`runner.<name>` — patching the originating module (e.g.
+content_writer.write_content) would have no effect, since `from x import y`
+binds a separate reference into runner's own namespace at import time.
+memory.* is patched on the memory module itself, since runner.py calls
+those via `memory.<name>(...)` attribute access.
 
-Confirms the two behaviors this wiring exists to guarantee: a "skip"
-decision produces NO post_package and never even calls the content
-pipeline, and a "feature_new" decision produces a post_package in the exact
-{text, hashtags, image_url} shape the dashboard reads.
+Confirms: a "skip" decision runs NONE of this (content or publishing); a
+"feature_new" decision produces a post_package in the dashboard's exact
+shape AND a portfolio PR; and a portfolio_publisher failure never loses the
+already-built post_package.
 """
 
 from __future__ import annotations
@@ -27,6 +28,14 @@ _PROFILE = {
     "skill_tags": ["python"],
     "readme": "# demo",
     "images": [],
+}
+
+_FEATURE_NEW_DECISION = {
+    "action": "feature_new",
+    "reasoning": "substantial, matches interests",
+    "target_project": None,
+    "positioning": "lead with the pipeline",
+    "next_build_suggestion": None,
 }
 
 
@@ -46,7 +55,36 @@ def _patch_memory(monkeypatch):
     return saved
 
 
-def test_skip_produces_no_post_package_and_skips_content_pipeline(monkeypatch):
+def _patch_happy_content_pipeline(monkeypatch):
+    """Patches content_writer/image_tool/self_reviewer/portfolio_publisher
+    to a working, non-network default — individual tests override one piece
+    to exercise a failure path."""
+    monkeypatch.setattr(
+        runner,
+        "write_content",
+        lambda profile, decision, voice_profile: {
+            "text": "Shipped a thing.",
+            "hashtags": ["python", "opensource"],
+            "image_prompt": "a diagram",
+        },
+    )
+    monkeypatch.setattr(runner, "generate_image", lambda prompt: "data:image/svg+xml;base64,ZmFrZQ==")
+    monkeypatch.setattr(
+        runner,
+        "run_self_review",
+        lambda post_package, profile, decision, voice_profile: (
+            post_package,
+            {"passed": True, "issues": [], "revised": False},
+        ),
+    )
+    monkeypatch.setattr(
+        runner,
+        "publish_to_portfolio",
+        lambda repo, profile, decision, post_package, delivery_id: "https://github.com/owner/portfolio-demo/pull/1",
+    )
+
+
+def test_skip_runs_none_of_the_content_or_publishing_pipeline(monkeypatch):
     saved = _patch_memory(monkeypatch)
     monkeypatch.setattr(runner, "analyze_release", lambda event: dict(_PROFILE))
     monkeypatch.setattr(
@@ -61,52 +99,34 @@ def test_skip_produces_no_post_package_and_skips_content_pipeline(monkeypatch):
         },
     )
 
-    content_writer_called = {"value": False}
-    generate_image_called = {"value": False}
+    called = {"content_writer": False, "image_tool": False, "self_reviewer": False, "portfolio_publisher": False}
+    monkeypatch.setattr(runner, "write_content", lambda *a, **k: called.__setitem__("content_writer", True) or {})
+    monkeypatch.setattr(runner, "generate_image", lambda *a, **k: called.__setitem__("image_tool", True) or "")
     monkeypatch.setattr(
         runner,
-        "write_content",
-        lambda *a, **k: content_writer_called.__setitem__("value", True) or {},
+        "run_self_review",
+        lambda *a, **k: called.__setitem__("self_reviewer", True) or ({}, {}),
     )
     monkeypatch.setattr(
         runner,
-        "generate_image",
-        lambda *a, **k: generate_image_called.__setitem__("value", True) or "",
+        "publish_to_portfolio",
+        lambda *a, **k: called.__setitem__("portfolio_publisher", True) or "",
     )
 
     result = runner.run_agent({"delivery_id": "d1", "repo": "owner/repo", "tag": "v1.0"})
 
     assert result["action"] == "skip"
     assert result["artifacts"] == {}
-    assert content_writer_called["value"] is False
-    assert generate_image_called["value"] is False
+    assert result["self_review"] is None
+    assert not any(called.values())
     assert saved["record"]["artifacts"] == {}
 
 
-def test_feature_new_produces_post_package_in_dashboard_shape(monkeypatch):
+def test_feature_new_produces_post_package_and_portfolio_pr(monkeypatch):
     saved = _patch_memory(monkeypatch)
     monkeypatch.setattr(runner, "analyze_release", lambda event: dict(_PROFILE))
-    monkeypatch.setattr(
-        runner,
-        "curate",
-        lambda profile, memory_context, delivery_id=None: {
-            "action": "feature_new",
-            "reasoning": "substantial, matches interests",
-            "target_project": None,
-            "positioning": "lead with the pipeline",
-            "next_build_suggestion": None,
-        },
-    )
-    monkeypatch.setattr(
-        runner,
-        "write_content",
-        lambda profile, decision, voice_profile: {
-            "text": "Shipped a thing.",
-            "hashtags": ["python", "opensource"],
-            "image_prompt": "a diagram",
-        },
-    )
-    monkeypatch.setattr(runner, "generate_image", lambda prompt: "data:image/svg+xml;base64,ZmFrZQ==")
+    monkeypatch.setattr(runner, "curate", lambda profile, memory_context, delivery_id=None: dict(_FEATURE_NEW_DECISION))
+    _patch_happy_content_pipeline(monkeypatch)
 
     result = runner.run_agent({"delivery_id": "d2", "repo": "owner/repo", "tag": "v1.0"})
 
@@ -117,53 +137,46 @@ def test_feature_new_produces_post_package_in_dashboard_shape(monkeypatch):
         "hashtags": ["python", "opensource"],
         "image_url": "data:image/svg+xml;base64,ZmFrZQ==",
     }
+    assert result["artifacts"]["portfolio_pr"] == "https://github.com/owner/portfolio-demo/pull/1"
+    assert result["self_review"] == {"passed": True, "issues": [], "revised": False}
     # The Firestore-bound copy carries the real "ts" write; the returned
     # dict must stay JSON-serializable (a plain ISO string, not the
     # SERVER_TIMESTAMP sentinel).
     assert isinstance(result["ts"], str)
-    assert saved["record"]["artifacts"]["post_package"] == pkg
+    assert saved["record"]["artifacts"] == result["artifacts"]
 
 
-def test_content_writer_failure_degrades_to_no_post_package(monkeypatch):
+def test_content_writer_failure_degrades_to_no_post_package_but_publisher_still_runs(monkeypatch):
     _patch_memory(monkeypatch)
     monkeypatch.setattr(runner, "analyze_release", lambda event: dict(_PROFILE))
-    monkeypatch.setattr(
-        runner,
-        "curate",
-        lambda profile, memory_context, delivery_id=None: {
-            "action": "feature_new",
-            "reasoning": "substantial",
-            "target_project": None,
-            "positioning": "x",
-            "next_build_suggestion": None,
-        },
-    )
+    monkeypatch.setattr(runner, "curate", lambda profile, memory_context, delivery_id=None: dict(_FEATURE_NEW_DECISION))
 
     def _boom(*a, **k):
         raise RuntimeError("content writer exploded")
 
     monkeypatch.setattr(runner, "write_content", _boom)
+    self_reviewer_called = {"value": False}
+    monkeypatch.setattr(
+        runner, "run_self_review", lambda *a, **k: self_reviewer_called.__setitem__("value", True) or ({}, {})
+    )
+    monkeypatch.setattr(
+        runner, "publish_to_portfolio", lambda *a, **k: "https://github.com/owner/portfolio-demo/pull/2"
+    )
 
     result = runner.run_agent({"delivery_id": "d3", "repo": "owner/repo", "tag": "v1.0"})
 
     assert result["action"] == "feature_new"
-    assert result["artifacts"] == {}
+    assert "post_package" not in result["artifacts"]
+    # Nothing to review without a post_package.
+    assert self_reviewer_called["value"] is False
+    # But the portfolio card is an independent artifact — it still runs.
+    assert result["artifacts"]["portfolio_pr"] == "https://github.com/owner/portfolio-demo/pull/2"
 
 
 def test_image_tool_failure_still_produces_post_package_without_image(monkeypatch):
     _patch_memory(monkeypatch)
     monkeypatch.setattr(runner, "analyze_release", lambda event: dict(_PROFILE))
-    monkeypatch.setattr(
-        runner,
-        "curate",
-        lambda profile, memory_context, delivery_id=None: {
-            "action": "feature_new",
-            "reasoning": "substantial",
-            "target_project": None,
-            "positioning": "x",
-            "next_build_suggestion": None,
-        },
-    )
+    monkeypatch.setattr(runner, "curate", lambda profile, memory_context, delivery_id=None: dict(_FEATURE_NEW_DECISION))
     monkeypatch.setattr(
         runner,
         "write_content",
@@ -178,9 +191,78 @@ def test_image_tool_failure_still_produces_post_package_without_image(monkeypatc
         raise RuntimeError("image tool exploded")
 
     monkeypatch.setattr(runner, "generate_image", _boom)
+    monkeypatch.setattr(
+        runner,
+        "run_self_review",
+        lambda post_package, profile, decision, voice_profile: (post_package, {"passed": True, "issues": [], "revised": False}),
+    )
+    monkeypatch.setattr(runner, "publish_to_portfolio", lambda *a, **k: "https://github.com/owner/portfolio-demo/pull/3")
 
     result = runner.run_agent({"delivery_id": "d4", "repo": "owner/repo", "tag": "v1.0"})
 
     pkg = result["artifacts"]["post_package"]
     assert pkg["text"] == "Shipped a thing."
     assert pkg["image_url"] == ""
+
+
+def test_self_reviewer_failure_keeps_the_unreviewed_post_package(monkeypatch):
+    _patch_memory(monkeypatch)
+    monkeypatch.setattr(runner, "analyze_release", lambda event: dict(_PROFILE))
+    monkeypatch.setattr(runner, "curate", lambda profile, memory_context, delivery_id=None: dict(_FEATURE_NEW_DECISION))
+    monkeypatch.setattr(
+        runner,
+        "write_content",
+        lambda profile, decision, voice_profile: {
+            "text": "Shipped a thing.",
+            "hashtags": ["python"],
+            "image_prompt": "a diagram",
+        },
+    )
+    monkeypatch.setattr(runner, "generate_image", lambda prompt: "data:x")
+
+    def _boom(*a, **k):
+        raise RuntimeError("self reviewer exploded")
+
+    monkeypatch.setattr(runner, "run_self_review", _boom)
+    monkeypatch.setattr(runner, "publish_to_portfolio", lambda *a, **k: "https://github.com/owner/portfolio-demo/pull/4")
+
+    result = runner.run_agent({"delivery_id": "d5", "repo": "owner/repo", "tag": "v1.0"})
+
+    assert result["artifacts"]["post_package"]["text"] == "Shipped a thing."
+    assert result["self_review"] is None
+    assert result["artifacts"]["portfolio_pr"] == "https://github.com/owner/portfolio-demo/pull/4"
+
+
+def test_portfolio_publisher_failure_preserves_post_package(monkeypatch):
+    _patch_memory(monkeypatch)
+    monkeypatch.setattr(runner, "analyze_release", lambda event: dict(_PROFILE))
+    monkeypatch.setattr(runner, "curate", lambda profile, memory_context, delivery_id=None: dict(_FEATURE_NEW_DECISION))
+    monkeypatch.setattr(
+        runner,
+        "write_content",
+        lambda profile, decision, voice_profile: {
+            "text": "Shipped a thing.",
+            "hashtags": ["python"],
+            "image_prompt": "a diagram",
+        },
+    )
+    monkeypatch.setattr(runner, "generate_image", lambda prompt: "data:x")
+    monkeypatch.setattr(
+        runner,
+        "run_self_review",
+        lambda post_package, profile, decision, voice_profile: (post_package, {"passed": True, "issues": [], "revised": False}),
+    )
+
+    def _boom(*a, **k):
+        raise RuntimeError("portfolio publisher exploded")
+
+    monkeypatch.setattr(runner, "publish_to_portfolio", _boom)
+
+    result = runner.run_agent({"delivery_id": "d6", "repo": "owner/repo", "tag": "v1.0"})
+
+    assert result["artifacts"]["post_package"] == {
+        "text": "Shipped a thing.",
+        "hashtags": ["python"],
+        "image_url": "data:x",
+    }
+    assert "portfolio_pr" not in result["artifacts"]
