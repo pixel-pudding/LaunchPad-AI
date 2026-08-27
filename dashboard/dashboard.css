@@ -679,15 +679,83 @@ a {
 }
 
 .target-repo-box {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 14px;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm);
     background: var(--bg-base);
     font-size: 13px;
     margin-bottom: 16px;
+    overflow: hidden;
+}
+
+.repo-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+}
+
+.repo-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 12px;
+    color: var(--text-primary);
+    padding: 6px 8px;
+}
+
+.repo-input::placeholder {
+    color: var(--text-faint);
+}
+
+.btn-connect-action {
+    background: var(--accent-sage);
+    color: #FCFCF9;
+    border: 1px solid var(--accent-sage-hover);
+    padding: 6px 14px;
+    font-size: 11.5px;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.btn-connect-action:hover {
+    background: var(--accent-sage-hover);
+}
+
+.repo-connected-state {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+}
+
+.repo-name-display {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.repo-action-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-edit-target {
+    background: transparent;
+    border: none;
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-decoration: underline;
+    transition: color var(--transition-fast);
+}
+
+.btn-edit-target:hover {
+    color: var(--text-primary);
 }
 
 .connect-note {

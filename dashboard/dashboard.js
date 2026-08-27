@@ -33,6 +33,8 @@ function switchTab(tabName) {
 
 // Expose functions globally on window
 window.switchTab = switchTab;
+window.connectPortfolioRepo = connectPortfolioRepo;
+window.editPortfolioRepo = editPortfolioRepo;
 
 function applyHashRoute() {
     const hash = window.location.hash.replace("#", "");
@@ -45,8 +47,69 @@ function applyHashRoute() {
 
 window.addEventListener("hashchange", applyHashRoute);
 
+// ── Portfolio Repo Connector ────────────────────────────────
+function parseRepoSlug(input) {
+    if (!input) return "";
+    let clean = input.trim().replace(/^https?:\/\/github\.com\//i, "").replace(/\/$/, "").replace(/\.git$/i, "");
+    const parts = clean.split("/").filter(Boolean);
+    if (parts.length >= 2) {
+        return `${parts[0]}/${parts[1]}`;
+    }
+    return clean;
+}
+
+function loadConnectedPortfolioRepo() {
+    const saved = localStorage.getItem("launchpad_portfolio_repo");
+    const inputWrapper = document.getElementById("repo-input-wrapper");
+    const connectedState = document.getElementById("repo-connected-state");
+    const nameDisplay = document.getElementById("portfolio-target-name");
+    const inputEl = document.getElementById("portfolio-repo-input");
+
+    if (saved && nameDisplay && inputWrapper && connectedState) {
+        nameDisplay.textContent = saved;
+        inputWrapper.style.display = "none";
+        connectedState.style.display = "flex";
+        if (inputEl) inputEl.value = saved;
+    } else if (inputWrapper && connectedState) {
+        inputWrapper.style.display = "flex";
+        connectedState.style.display = "none";
+        if (inputEl) inputEl.value = "";
+    }
+}
+
+function connectPortfolioRepo() {
+    const inputEl = document.getElementById("portfolio-repo-input");
+    if (!inputEl) return;
+    const slug = parseRepoSlug(inputEl.value);
+
+    if (!slug || !slug.includes("/")) {
+        showToast("Please enter a valid repo (e.g. username/portfolio or GitHub URL)");
+        return;
+    }
+
+    localStorage.setItem("launchpad_portfolio_repo", slug);
+    loadConnectedPortfolioRepo();
+    showToast(`Connected ${slug} as target portfolio repo!`);
+}
+
+function editPortfolioRepo() {
+    const inputWrapper = document.getElementById("repo-input-wrapper");
+    const connectedState = document.getElementById("repo-connected-state");
+    const inputEl = document.getElementById("portfolio-repo-input");
+
+    if (inputWrapper && connectedState) {
+        inputWrapper.style.display = "flex";
+        connectedState.style.display = "none";
+        if (inputEl) {
+            inputEl.value = "";
+            inputEl.focus();
+        }
+    }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     applyHashRoute();
+    loadConnectedPortfolioRepo();
 
     // Initial data fetch
     loadDecisions();
@@ -169,25 +232,28 @@ async function loadLatestPost() {
 function renderPostCard(post) {
     const empty = document.getElementById("post-card-empty");
     const content = document.getElementById("post-card-content");
+    const repoEl = document.getElementById("post-repo");
+    const badge = document.getElementById("post-action-badge");
 
     if (!post || !post.post_package || Object.keys(post.post_package).length === 0) {
-        empty.style.display = "block";
-        content.style.display = "none";
+        if (empty) empty.style.display = "block";
+        if (content) content.style.display = "none";
+        if (repoEl) repoEl.textContent = "";
+        if (badge) badge.style.display = "none";
         return;
     }
 
-    empty.style.display = "none";
-    content.style.display = "block";
+    if (empty) empty.style.display = "none";
+    if (content) content.style.display = "block";
 
     currentPostPackage = post;
     const pkg = post.post_package;
 
     // Repo name + badge
-    const repoEl = document.getElementById("post-repo");
     if (repoEl) repoEl.textContent = post.repo || "";
 
-    const badge = document.getElementById("post-action-badge");
     if (badge) {
+        badge.style.display = "inline-block";
         badge.textContent = (post.action || "READY").toUpperCase();
         badge.className = `decision-badge font-mono-lp badge-${post.action || "feature_new"}`;
     }
