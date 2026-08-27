@@ -17,6 +17,7 @@ from google.cloud import firestore
 from agent import memory
 from agent.subagents.announcer import assemble_post_package
 from agent.subagents.content_writer import write_content
+from agent.subagents.next_build_suggester import suggest_next_builds
 from agent.subagents.portfolio_publisher import publish as publish_to_portfolio
 from agent.subagents.relevance_curator import curate
 from agent.subagents.release_analyst import analyze_release
@@ -46,9 +47,11 @@ def run_agent(event: dict) -> dict:
     content_writer -> generate_image -> announcer -> self_reviewer (only if
     a post_package exists to review) -> portfolio_publisher (runs
     regardless of whether the post pipeline succeeded — the portfolio card
-    is an independent artifact), each failing gracefully: log and
-    continue/skip rather than crash the webhook] -> save decision ->
-    mark processed -> return.
+    is an independent artifact) -> next_build_suggester (a pure, secondary
+    byproduct — reads only already-fetched memory, writes only its own
+    artifacts key, never influences the decision/post/PR), each failing
+    gracefully: log and continue/skip rather than crash the webhook] ->
+    save decision -> mark processed -> return.
     """
     delivery_id = event.get("delivery_id", "")
     repo = event.get("repo", "")
@@ -141,6 +144,20 @@ def run_agent(event: dict) -> dict:
         except Exception:
             logger.error(
                 "portfolio_publisher failed for delivery=%s — post package (if any) is unaffected",
+                delivery_id,
+                exc_info=True,
+            )
+
+        # Pure byproduct, last step: reads only the already-fetched
+        # memory_context, writes only its own artifacts key. A failure here
+        # cannot touch the decision, post_package, or portfolio_pr above.
+        try:
+            artifacts["next_builds"] = suggest_next_builds(
+                memory_context["featured_projects"], memory_context["context_profile"]
+            )
+        except Exception:
+            logger.error(
+                "next_build_suggester failed for delivery=%s — continuing without suggestions",
                 delivery_id,
                 exc_info=True,
             )
