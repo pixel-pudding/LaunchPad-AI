@@ -421,6 +421,57 @@ body {
     transform: translateY(-1px);
 }
 
+/* ── Next Builds Footnote ──────────────────────────────────── */
+.next-builds-section {
+    margin-bottom: 2rem;
+}
+
+.next-builds-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.next-builds-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.75rem;
+}
+
+.next-builds-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.next-build-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.6rem 0.85rem;
+    background: var(--surface-hover);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--accent);
+}
+
+.next-build-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.next-build-reason {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.45;
+}
+
 /* ── Decision Log ──────────────────────────────────────────── */
 .decision-log-section {
     margin-bottom: 2rem;

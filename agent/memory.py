@@ -63,6 +63,12 @@ def get_context_profile(client: firestore.Client | None = None) -> dict[str, Any
     return doc.to_dict() if doc.exists else {}
 
 
+def set_context_profile(data: dict[str, Any], client: firestore.Client | None = None) -> None:
+    """Writes (or overwrites) the dev's context/profile document."""
+    client = client or get_client()
+    client.collection("context").document("profile").set(data, merge=True)
+
+
 # ── voice/profile — post voice ───────────────────────────────────────────
 
 

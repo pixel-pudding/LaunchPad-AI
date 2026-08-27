@@ -216,6 +216,7 @@ async def api_latest_post() -> dict:
                     "action": data.get("action", ""),
                     "reasoning": data.get("reasoning", ""),
                     "post_package": artifacts.get("post_package", {}),
+                    "next_builds": artifacts.get("next_builds", []),
                     "readme_pr": artifacts.get("readme_pr", ""),
                     "portfolio_pr": artifacts.get("portfolio_pr", ""),
                 }
