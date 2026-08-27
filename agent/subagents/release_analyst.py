@@ -22,9 +22,13 @@ _MARKER_TAGS = {
 
 
 def analyze_release(event: dict[str, Any]) -> dict[str, Any]:
-    """Returns a project profile: {name, summary, stack, skill_tags, readme, images[]}."""
+    """Returns a project profile: {name, summary, stack, skill_tags, readme, images[], release_notes, tag}."""
     repo_data = github_get_repo(event.get("repo", ""))
-    return build_profile(repo_data)
+    profile = build_profile(repo_data)
+    profile["tag"] = event.get("tag", "")
+    profile["release_name"] = event.get("release_name", "")
+    profile["release_notes"] = event.get("release_body") or event.get("release_notes") or ""
+    return profile
 
 
 import re
