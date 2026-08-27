@@ -37,7 +37,7 @@ def test_tier_2_resolves_live_deployment_snapshot():
         "demo_url": "https://postmortem-ai.vercel.app",
     }
     url = image_tool.resolve_project_image("AmeyaSingh23/postmortem-ai", profile)
-    assert url == "https://image.thum.io/get/width/800/crop/600/https://postmortem-ai.vercel.app"
+    assert url == "https://image.thum.io/get/width/1200/https://postmortem-ai.vercel.app"
 
 
 def test_tier_3_resolves_github_opengraph_card():
