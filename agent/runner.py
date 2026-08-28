@@ -10,6 +10,7 @@ The seam signature is frozen (CLAUDE.md / WORK_SPLIT.md §1) and must not change
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone
 
 from google.cloud import firestore
@@ -69,8 +70,10 @@ def run_agent(event: dict) -> dict:
         logger.info("Duplicate delivery %s for %s — skipping", delivery_id, repo)
         return {"status": "duplicate", "delivery_id": delivery_id, "repo": repo}
 
+    start_time = time.time()
+    started_at_iso = datetime.now(timezone.utc).isoformat()
     logger.info(
-        "Processing release: repo=%s tag=%s delivery=%s",
+        "Ingesting release for repo=%s tag=%s delivery_id=%s",
         repo,
         event.get("tag"),
         delivery_id,
@@ -84,7 +87,7 @@ def run_agent(event: dict) -> dict:
             "repo": repo,
             "tag": event.get("tag", ""),
             "delivery_id": delivery_id,
-            "started_at": datetime.now(timezone.utc).isoformat(),
+            "started_at": started_at_iso,
         })
     except Exception:
         pass
@@ -96,7 +99,16 @@ def run_agent(event: dict) -> dict:
     ensure_profile(event)
 
     try:
-        memory.set_agent_status({"stage": 2, "stage_name": "Profiling Repo"})
+        time.sleep(0.4)
+        memory.set_agent_status({
+            "status": "running",
+            "stage": 2,
+            "stage_name": "Profiling Repo",
+            "repo": repo,
+            "tag": event.get("tag", ""),
+            "delivery_id": delivery_id,
+            "started_at": started_at_iso,
+        })
     except Exception:
         pass
 
@@ -108,7 +120,16 @@ def run_agent(event: dict) -> dict:
     }
 
     try:
-        memory.set_agent_status({"stage": 3, "stage_name": "Gemini 3.5 Deciding"})
+        time.sleep(0.4)
+        memory.set_agent_status({
+            "status": "running",
+            "stage": 3,
+            "stage_name": "Gemini 3.5 Deciding",
+            "repo": repo,
+            "tag": event.get("tag", ""),
+            "delivery_id": delivery_id,
+            "started_at": started_at_iso,
+        })
     except Exception:
         pass
 
@@ -134,7 +155,16 @@ def run_agent(event: dict) -> dict:
         )
 
         try:
-            memory.set_agent_status({"stage": 4, "stage_name": "Staging LinkedIn Post & Image"})
+            time.sleep(0.4)
+            memory.set_agent_status({
+                "status": "running",
+                "stage": 4,
+                "stage_name": "Staging LinkedIn Post & Image",
+                "repo": repo,
+                "tag": event.get("tag", ""),
+                "delivery_id": delivery_id,
+                "started_at": started_at_iso,
+            })
         except Exception:
             pass
 
@@ -185,7 +215,16 @@ def run_agent(event: dict) -> dict:
                 )
 
         try:
-            memory.set_agent_status({"stage": 5, "stage_name": "Splicing Codebase"})
+            time.sleep(0.4)
+            memory.set_agent_status({
+                "status": "running",
+                "stage": 5,
+                "stage_name": "Splicing Codebase",
+                "repo": repo,
+                "tag": event.get("tag", ""),
+                "delivery_id": delivery_id,
+                "started_at": started_at_iso,
+            })
         except Exception:
             pass
 
@@ -215,7 +254,16 @@ def run_agent(event: dict) -> dict:
             artifacts["portfolio_pr_merged"] = False
             if not pr_auto_merge_suppressed and config.get_portfolio_auto_merge():
                 try:
-                    memory.set_agent_status({"stage": 6, "stage_name": "Auto-Merging PR"})
+                    time.sleep(0.4)
+                    memory.set_agent_status({
+                        "status": "running",
+                        "stage": 6,
+                        "stage_name": "Auto-Merging PR",
+                        "repo": repo,
+                        "tag": event.get("tag", ""),
+                        "delivery_id": delivery_id,
+                        "started_at": started_at_iso,
+                    })
                 except Exception:
                     pass
                 try:
@@ -253,13 +301,19 @@ def run_agent(event: dict) -> dict:
     memory.save_decision(delivery_id, {**record, "ts": firestore.SERVER_TIMESTAMP})
     memory.mark_delivery_processed(delivery_id)
 
+    total_seconds = round(time.time() - start_time, 1)
     try:
         memory.set_agent_status({
             "status": "idle",
             "stage": 6,
+            "stage_name": "Completed",
+            "repo": repo,
+            "tag": event.get("tag", ""),
             "last_delivery_id": delivery_id,
             "action": decision["action"],
+            "started_at": started_at_iso,
             "completed_at": datetime.now(timezone.utc).isoformat(),
+            "duration_seconds": total_seconds,
         })
     except Exception:
         pass

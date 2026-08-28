@@ -275,6 +275,8 @@ function toggleTerminalExpansion() {
 }
 
 // ── Real-Time Agent Telemetry Polling (/api/agent-status) ────────────
+let highestStageSeen = 1;
+
 async function pollAgentStatus() {
     try {
         const resp = await fetch("/api/agent-status");
@@ -286,24 +288,25 @@ async function pollAgentStatus() {
 
         if (statusData && statusData.status === "running") {
             currentRunningRepo = statusData.repo || "";
+            const currentStage = Math.max(statusData.stage || 1, highestStageSeen);
+            highestStageSeen = currentStage;
+
             if (!isAgentCurrentlyRunning) {
                 isAgentCurrentlyRunning = true;
                 currentAgentExecutionState = "running";
                 isTerminalExpanded = true;
-                agentRunStartTime = Date.now();
                 renderTerminalHeader();
                 if (equalizer) equalizer.classList.add("pulsing");
-
-                if (agentTimerInterval) clearInterval(agentTimerInterval);
-                agentTimerInterval = setInterval(() => {
-                    if (timerBadge && agentRunStartTime) {
-                        const elapsed = ((Date.now() - agentRunStartTime) / 1000).toFixed(1);
-                        timerBadge.textContent = `${elapsed}s elapsed`;
-                    }
-                }, 100);
             }
 
-            const currentStage = statusData.stage || 1;
+            // Real-time server-synchronized timer
+            const serverStart = statusData.started_at ? new Date(statusData.started_at).getTime() : Date.now();
+            const elapsed = Math.max(0, ((Date.now() - serverStart) / 1000)).toFixed(1);
+            if (timerBadge) {
+                timerBadge.style.display = "inline-block";
+                timerBadge.textContent = `${elapsed}s elapsed`;
+            }
+
             const stageItems = [
                 document.getElementById("stage-1"),
                 document.getElementById("stage-2"),
@@ -328,7 +331,7 @@ async function pollAgentStatus() {
             // Finished execution!
             isAgentCurrentlyRunning = false;
             currentAgentExecutionState = "idle";
-            if (agentTimerInterval) clearInterval(agentTimerInterval);
+            highestStageSeen = 1;
 
             const stageItems = [
                 document.getElementById("stage-1"),
@@ -343,20 +346,24 @@ async function pollAgentStatus() {
             });
 
             if (equalizer) equalizer.classList.remove("pulsing");
-            const totalElapsed = agentRunStartTime ? ((Date.now() - agentRunStartTime) / 1000).toFixed(1) : (statusData.started_at && statusData.completed_at ? ((new Date(statusData.completed_at) - new Date(statusData.started_at)) / 1000).toFixed(1) : "4.2");
-            lastRunDuration = `${totalElapsed}s`;
+            const finalDuration = statusData.duration_seconds
+                ? `${statusData.duration_seconds}s`
+                : (statusData.started_at && statusData.completed_at
+                    ? `${((new Date(statusData.completed_at) - new Date(statusData.started_at)) / 1000).toFixed(1)}s`
+                    : "4.5s");
+            lastRunDuration = finalDuration;
             renderTerminalHeader();
 
-            // Reload decisions immediately to show the new card & stream post
+            // Reload decisions immediately to show the new card & stream post without refresh!
             await loadDecisions();
 
-            // Auto-collapse after 15 seconds
+            // Auto-collapse after 20 seconds
             setTimeout(() => {
                 if (!isAgentCurrentlyRunning) {
                     isTerminalExpanded = false;
                     renderTerminalHeader();
                 }
-            }, 15000);
+            }, 20000);
         }
     } catch (e) {
         console.warn("Could not poll agent status:", e);
@@ -837,10 +844,10 @@ document.addEventListener("DOMContentLoaded", () => {
     loadDecisions();
     pollAgentStatus();
 
-    // Real-time telemetry polling (every 600ms for instant live streaming updates)
+    // Real-time telemetry polling (every 350ms for instant live streaming updates)
     setInterval(() => {
         pollAgentStatus();
-    }, 600);
+    }, 350);
 
     // Adaptive decisions polling (every 3s)
     setInterval(() => {
