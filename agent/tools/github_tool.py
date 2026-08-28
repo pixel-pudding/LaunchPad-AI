@@ -306,15 +306,43 @@ def github_merge_pr(repo: str, pr_number: int) -> dict[str, Any]:
     Raises on failure (not mergeable, branch protection, permissions, a
     conflicting head change, etc.) rather than reporting a failed merge as
     successful — the caller decides how to degrade (leave the PR open).
+    Automatically deletes the temporary remote feature branch upon successful merge.
     """
     owner = repo.split("/")[0] if "/" in repo else None
+    headers = _get_headers_for_owner(owner)
+
+    # Fetch PR details to obtain the head branch ref
+    branch_ref = None
+    try:
+        pr_resp = requests.get(
+            f"{_GITHUB_API}/repos/{repo}/pulls/{pr_number}",
+            headers=headers,
+            timeout=10,
+        )
+        if pr_resp.status_code == 200:
+            branch_ref = pr_resp.json().get("head", {}).get("ref")
+    except Exception:
+        pass
+
     resp = requests.put(
         f"{_GITHUB_API}/repos/{repo}/pulls/{pr_number}/merge",
-        headers=_get_headers_for_owner(owner),
+        headers=headers,
         timeout=10,
     )
     resp.raise_for_status()
     data = resp.json()
+
+    # Automatically delete the temporary feature branch on successful merge
+    if data.get("merged") and branch_ref and branch_ref.startswith("launchpad-ai/"):
+        try:
+            requests.delete(
+                f"{_GITHUB_API}/repos/{repo}/git/refs/heads/{branch_ref}",
+                headers=headers,
+                timeout=10,
+            )
+        except Exception:
+            logger.warning("Could not delete merged branch %s on %s", branch_ref, repo)
+
     return {"merged": bool(data.get("merged", False)), "sha": data.get("sha")}
 
 

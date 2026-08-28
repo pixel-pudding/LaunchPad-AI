@@ -61,12 +61,26 @@ Return ONLY structured output matching the schema.
 """
 
 _EDIT_INSTRUCTION = """\
-You are an expert web developer adding ONE new project entry to an existing portfolio codebase. \
-Generate ONLY the new project entry (entry_snippet) in this file's OWN existing format (HTML card, React JSX component, or JavaScript/JSON object). \
-Do NOT rewrite the whole file. \
-Also specify target_anchor: an exact 1-2 line string from the existing file right AFTER which this new entry should be inserted (such as the closing tag or brace of the preceding project card or array item). \
-If new_project.demo_url is provided and non-empty, include a Live Demo link alongside the GitHub repo link matching the style of existing cards with demo links. If demo_url is empty, only render the GitHub link. \
-If new_project.image_url is provided, use it directly as the image src in <img src="..." />. \
+You are an expert web developer updating a portfolio codebase with a release update.
+The portfolio file format can be Vanilla HTML cards, React/Next.js JSX, Vue, Svelte, Markdown, or JavaScript/JSON arrays.
+
+You must handle two actions based on the action field in the payload:
+
+1. If action is "update_existing":
+   - Find the EXISTING entry, card, JSX component, or object in current_file_content that corresponds to this project (matching by project name, repo name, or slug).
+   - Set action_type = "update_existing".
+   - Set target_to_replace: The EXACT multi-line character-for-character snippet from current_file_content representing ONLY that existing project entry.
+   - Set entry_snippet: The updated entry in the exact same format and indentation, with the updated summary, new capabilities/version, tags, and screenshot image.
+   - Do NOT add a duplicate card.
+
+2. If action is "feature_new":
+   - Set action_type = "feature_new".
+   - Set anchor_context: An EXACT, UNIQUE 2-5 line excerpt from current_file_content right AFTER which the new project entry should be placed (such as the end of the preceding project card or array item, strictly INSIDE the projects container/list).
+   - Set entry_snippet: The newly crafted project entry matching the codebase's existing style and structure.
+   - If new_project.demo_url is provided and non-empty, include the Live link alongside GitHub repo. If demo_url is empty, only render the GitHub link.
+   - If new_project.image_url is provided, use it directly as the image src in <img src="..." /> or image property.
+
+Also provide full_file_content as the complete updated file.
 Return ONLY structured output matching the schema.
 """
 
@@ -84,9 +98,13 @@ class StructureDetection(BaseModel):
 
 
 class FormatMatchedEdit(BaseModel):
-    entry_snippet: str = ""
+    action_type: Literal["update_existing", "feature_new"] = "feature_new"
+    target_to_replace: str = ""
+    anchor_context: str = ""
     target_anchor: str = ""
+    entry_snippet: str = ""
     file_content: str = ""
+    full_file_content: str = ""
 
 
 def _pick_candidate_files_for_content(listing: list[str], limit: int) -> list[str]:
@@ -173,11 +191,13 @@ def _build_edit_prompt(
     post_package: dict[str, Any],
     repo: str,
 ) -> str:
+    action = decision.get("action", "feature_new")
     payload = {
+        "action": action,
         "current_file_content": current_content,
         "format": location.get("format"),
         "insertion_notes": location.get("insertion_notes"),
-        "new_project": {
+        "project": {
             "name": profile.get("name"),
             "summary": profile.get("summary"),
             "stack": profile.get("stack"),
@@ -187,9 +207,12 @@ def _build_edit_prompt(
             "url": f"https://github.com/{repo}",
         },
     }
-    return "Add this new project entry to the file below, in its own format.\n\n" + json.dumps(
-        payload, indent=2, default=str
+    instruction_text = (
+        "Update the existing project entry in the file below in-place."
+        if action == "update_existing"
+        else "Add this new project entry to the file below, in its own format."
     )
+    return instruction_text + "\n\n" + json.dumps(payload, indent=2, default=str)
 
 
 def _call_gemini_for_edit(prompt: str) -> FormatMatchedEdit:
@@ -229,19 +252,7 @@ def _splice_snippet(
         idx = current_content.find(anchor_clean) + len(anchor_clean)
         return current_content[:idx] + "\n\n" + snippet + current_content[idx:]
 
-    # 2. HTML format fallback: find closing of last project-card or container
-    if format_type == "html_cards" or "<div" in snippet or "<section" in current_content:
-        markers = [
-            "</div>\n                <div class=\"project-card-bar\"></div>\n            </div>",
-            "</div>\n            </div>",
-            "</section>",
-        ]
-        for marker in markers:
-            if marker in current_content:
-                last_idx = current_content.rfind(marker) + len(marker)
-                return current_content[:last_idx] + "\n\n" + snippet + current_content[last_idx:]
-
-    # 3. JSON/TS array fallback: find last '];' or ']'
+    # 2. JSON/TS array fallback: find last '];' or ']'
     if "];" in current_content:
         idx = current_content.rfind("];")
         return current_content[:idx].rstrip().rstrip(",") + ",\n  " + snippet + "\n];" + current_content[idx + 2 :]
@@ -250,7 +261,16 @@ def _splice_snippet(
         idx = current_content.rfind("]")
         return current_content[:idx].rstrip().rstrip(",") + ",\n  " + snippet + "\n]" + current_content[idx + 1 :]
 
-    # 4. End of file fallback
+    # 3. HTML / JSX fallback: find closing tag of previous project card
+    markers = [
+        "</div>\n                <div class=\"project-card-bar\"></div>\n            </div>",
+        "</div>\n            </div>",
+    ]
+    for marker in markers:
+        if marker in current_content:
+            last_idx = current_content.rfind(marker) + len(marker)
+            return current_content[:last_idx] + "\n\n" + snippet + current_content[last_idx:]
+
     return current_content + "\n\n" + snippet
 
 
@@ -263,18 +283,42 @@ def generate_format_matched_file(
     repo: str,
 ) -> str:
     """Returns the FULL edited content for location['file_path'], with a new
-    project entry spliced deterministically per location['insertion_notes'].
+    or updated project entry spliced deterministically per location['insertion_notes'].
     """
     current_content = github_get_file(portfolio_repo, location["file_path"]) or ""
+    if not current_content:
+        return ""
+
     prompt = _build_edit_prompt(current_content, location, profile, decision, post_package, repo)
     result = _call_gemini_for_edit(prompt)
 
+    action = decision.get("action", "feature_new")
+
+    # 1. In-Place Update for UPDATE_EXISTING
+    if (action == "update_existing" or result.action_type == "update_existing") and result.target_to_replace:
+        target = result.target_to_replace.strip()
+        if target and target in current_content and result.entry_snippet:
+            return current_content.replace(target, result.entry_snippet.strip(), 1)
+
+    # 2. Context Anchor Splicing for FEATURE_NEW
+    if result.anchor_context and result.entry_snippet:
+        anchor = result.anchor_context.strip()
+        if anchor and anchor in current_content:
+            idx = current_content.find(anchor) + len(anchor)
+            return current_content[:idx] + "\n\n" + result.entry_snippet.strip() + current_content[idx:]
+
+    # 3. Fallback: Check if Gemini returned full_file_content or file_content
+    full_content = result.full_file_content or result.file_content
+    if full_content and not result.entry_snippet:
+        return full_content
+
+    # 4. Deterministic Snippet Splice (Safe fallbacks)
     if result.entry_snippet:
         return _splice_snippet(
             current_content,
             result.entry_snippet,
-            anchor=result.target_anchor,
+            anchor=result.anchor_context or result.target_anchor,
             format_type=location.get("format", ""),
         )
 
-    return result.file_content or current_content
+    return full_content or current_content

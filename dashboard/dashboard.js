@@ -230,19 +230,48 @@ function toggleDecisionSidebar() {
     btn.title = isCollapsed ? "Expand Feed" : "Collapse Feed";
 }
 
-// ── Live Terminal Expansion Toggle ────────────────────────────────────
-function toggleTerminalExpansion() {
-    const panel = document.getElementById("terminal-expanded-panel");
-    const standby = document.getElementById("terminal-standby-bar");
-    if (!panel || !standby) return;
+let currentAgentExecutionState = "idle"; // "idle" | "running"
+let isTerminalExpanded = false;
+let lastRunDuration = "3.8s";
+let currentRunningRepo = "";
 
-    if (panel.style.display === "none") {
-        panel.style.display = "block";
-        standby.style.display = "none";
+// ── Live Terminal Expansion & Decoupled Header State ──────────────────
+function renderTerminalHeader() {
+    const titleEl = document.getElementById("terminal-status-title");
+    const descEl = document.getElementById("terminal-status-desc");
+    const dotEl = document.getElementById("terminal-status-dot");
+    const toggleBtn = document.getElementById("btn-terminal-toggle");
+    const timerBadge = document.getElementById("terminal-timer-badge");
+    const stagesContainer = document.getElementById("terminal-stages-collapsible");
+
+    if (currentAgentExecutionState === "running") {
+        if (titleEl) titleEl.textContent = "AGENT RUNNING";
+        if (descEl) descEl.textContent = currentRunningRepo ? `· Processing ${currentRunningRepo}` : "· Processing GitHub Release";
+        if (dotEl) {
+            dotEl.style.background = "#22C55E";
+            dotEl.className = "dot-indicator pulse";
+        }
+        if (timerBadge) timerBadge.style.display = "inline-block";
+        if (toggleBtn) toggleBtn.textContent = isTerminalExpanded ? "Collapse logs ▴" : "Expand logs ▾";
     } else {
-        panel.style.display = "none";
-        standby.style.display = "flex";
+        if (titleEl) titleEl.textContent = "AGENT STANDBY";
+        if (descEl) descEl.textContent = lastRunDuration ? `· Last run completed in ${lastRunDuration}` : "· Watching connected GitHub repositories for tagged releases";
+        if (dotEl) {
+            dotEl.style.background = "#22C55E";
+            dotEl.className = "dot-indicator";
+        }
+        if (timerBadge) timerBadge.style.display = "none";
+        if (toggleBtn) toggleBtn.textContent = isTerminalExpanded ? "Collapse logs ▴" : "View execution logs ▾";
     }
+
+    if (stagesContainer) {
+        stagesContainer.style.display = isTerminalExpanded ? "block" : "none";
+    }
+}
+
+function toggleTerminalExpansion() {
+    isTerminalExpanded = !isTerminalExpanded;
+    renderTerminalHeader();
 }
 
 // ── Real-Time Agent Telemetry Polling (/api/agent-status) ────────────
@@ -252,17 +281,17 @@ async function pollAgentStatus() {
         if (!resp.ok) return;
         const statusData = await resp.json();
 
-        const panel = document.getElementById("terminal-expanded-panel");
-        const standby = document.getElementById("terminal-standby-bar");
         const timerBadge = document.getElementById("terminal-timer-badge");
         const equalizer = document.getElementById("model-equalizer-bars");
 
         if (statusData && statusData.status === "running") {
+            currentRunningRepo = statusData.repo || "";
             if (!isAgentCurrentlyRunning) {
                 isAgentCurrentlyRunning = true;
+                currentAgentExecutionState = "running";
+                isTerminalExpanded = true;
                 agentRunStartTime = Date.now();
-                if (panel) panel.style.display = "block";
-                if (standby) standby.style.display = "none";
+                renderTerminalHeader();
                 if (equalizer) equalizer.classList.add("pulsing");
 
                 if (agentTimerInterval) clearInterval(agentTimerInterval);
@@ -298,6 +327,7 @@ async function pollAgentStatus() {
         } else if (isAgentCurrentlyRunning && (!statusData || statusData.status === "idle")) {
             // Finished execution!
             isAgentCurrentlyRunning = false;
+            currentAgentExecutionState = "idle";
             if (agentTimerInterval) clearInterval(agentTimerInterval);
 
             const stageItems = [
@@ -314,7 +344,8 @@ async function pollAgentStatus() {
 
             if (equalizer) equalizer.classList.remove("pulsing");
             const totalElapsed = agentRunStartTime ? ((Date.now() - agentRunStartTime) / 1000).toFixed(1) : "3.8";
-            if (timerBadge) timerBadge.textContent = `✓ Done in ${totalElapsed}s`;
+            lastRunDuration = `${totalElapsed}s`;
+            renderTerminalHeader();
 
             // Reload decisions immediately to show the new card & stream post
             await loadDecisions();
@@ -322,10 +353,8 @@ async function pollAgentStatus() {
             // Auto-collapse after 6 seconds
             setTimeout(() => {
                 if (!isAgentCurrentlyRunning) {
-                    if (panel) panel.style.display = "none";
-                    if (standby) standby.style.display = "flex";
-                    const standbyAction = document.getElementById("terminal-standby-action");
-                    if (standbyAction) standbyAction.textContent = `View last run logs (${totalElapsed}s) ▾`;
+                    isTerminalExpanded = false;
+                    renderTerminalHeader();
                 }
             }, 6000);
         }
@@ -474,7 +503,7 @@ function renderDecisions(decisions) {
                 <span class="decision-meta-time font-mono-lp" style="font-size:11px; color:var(--text-muted);">${escapeHtml(tsFormatted)}</span>
             </div>
             <div class="decision-row-body">
-                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                <div class="decision-badges-wrap" style="display:flex; align-items:center; gap:6px; margin-bottom:6px; flex-wrap:wrap;">
                     <span class="decision-badge font-mono-lp ${badgeClass}">${escapeHtml(action.toUpperCase())}</span>
                     ${prPill}
                 </div>
