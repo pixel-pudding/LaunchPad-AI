@@ -128,8 +128,8 @@ async def webhook(
 
     event = json.loads(body)
     action = event.get("action")
-    if action != "published":
-        logger.info("Ignoring release action: %s (only 'published' is processed)", action)
+    if action not in ("published", "released", "created"):
+        logger.info("Ignoring release action: %s (only published/released/created are processed)", action)
         return Response(status_code=200, content=f"ignored release action {action}")
 
     # 3. Parse and build the Pub/Sub message

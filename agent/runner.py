@@ -134,52 +134,7 @@ def run_agent(event: dict) -> dict:
         )
 
         try:
-            memory.set_agent_status({"stage": 4, "stage_name": "Splicing Codebase"})
-        except Exception:
-            pass
-
-        pr_number = None
-        pr_repo = None
-        pr_mode = None
-        pr_auto_merge_suppressed = False
-        try:
-            pr = publish_to_portfolio(
-                repo, profile, decision, artifacts.get("post_package", {}), delivery_id, event.get("tag", "")
-            )
-            if pr is not None:
-                artifacts["portfolio_pr"] = pr["url"]
-                artifacts["portfolio_mode"] = pr["mode"]
-                pr_number = pr["number"]
-                pr_repo = pr["portfolio_repo"]
-                pr_mode = pr["mode"]
-                pr_auto_merge_suppressed = pr.get("auto_merge_suppressed", False)
-        except Exception:
-            logger.error(
-                "portfolio_publisher failed for delivery=%s — post package (if any) is unaffected",
-                delivery_id,
-                exc_info=True,
-            )
-
-        if pr_number is not None:
-            artifacts["portfolio_pr_merged"] = False
-            if not pr_auto_merge_suppressed and config.get_portfolio_auto_merge():
-                try:
-                    memory.set_agent_status({"stage": 5, "stage_name": "Auto-Merging PR"})
-                except Exception:
-                    pass
-                try:
-                    merge_result = github_merge_pr(pr_repo, pr_number)
-                    artifacts["portfolio_pr_merged"] = merge_result["merged"]
-                    artifacts["portfolio_pr_sha"] = merge_result["sha"]
-                except Exception:
-                    logger.error(
-                        "auto-merge failed for delivery=%s — PR left open for manual merge",
-                        delivery_id,
-                        exc_info=True,
-                    )
-
-        try:
-            memory.set_agent_status({"stage": 6, "stage_name": "Staging LinkedIn Post"})
+            memory.set_agent_status({"stage": 4, "stage_name": "Staging LinkedIn Post & Image"})
         except Exception:
             pass
 
@@ -228,6 +183,51 @@ def run_agent(event: dict) -> dict:
                     delivery_id,
                     exc_info=True,
                 )
+
+        try:
+            memory.set_agent_status({"stage": 5, "stage_name": "Splicing Codebase"})
+        except Exception:
+            pass
+
+        pr_number = None
+        pr_repo = None
+        pr_mode = None
+        pr_auto_merge_suppressed = False
+        try:
+            pr = publish_to_portfolio(
+                repo, profile, decision, artifacts.get("post_package", {}), delivery_id, event.get("tag", "")
+            )
+            if pr is not None:
+                artifacts["portfolio_pr"] = pr["url"]
+                artifacts["portfolio_mode"] = pr["mode"]
+                pr_number = pr["number"]
+                pr_repo = pr["portfolio_repo"]
+                pr_mode = pr["mode"]
+                pr_auto_merge_suppressed = pr.get("auto_merge_suppressed", False)
+        except Exception:
+            logger.error(
+                "portfolio_publisher failed for delivery=%s — post package (if any) is unaffected",
+                delivery_id,
+                exc_info=True,
+            )
+
+        if pr_number is not None:
+            artifacts["portfolio_pr_merged"] = False
+            if not pr_auto_merge_suppressed and config.get_portfolio_auto_merge():
+                try:
+                    memory.set_agent_status({"stage": 6, "stage_name": "Auto-Merging PR"})
+                except Exception:
+                    pass
+                try:
+                    merge_result = github_merge_pr(pr_repo, pr_number)
+                    artifacts["portfolio_pr_merged"] = merge_result["merged"]
+                    artifacts["portfolio_pr_sha"] = merge_result["sha"]
+                except Exception:
+                    logger.error(
+                        "auto-merge failed for delivery=%s — PR left open for manual merge",
+                        delivery_id,
+                        exc_info=True,
+                    )
 
         # Pure byproduct, last step
         try:
