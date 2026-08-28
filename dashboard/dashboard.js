@@ -76,21 +76,43 @@ async function loadAutoMergeConfig() {
 }
 
 function updateAutoMergeUI(enabled) {
-    autoMergeEnabled = enabled;
+    autoMergeEnabled = !!enabled;
     const headerToggle = document.getElementById("header-automerge-toggle");
-    const headerText = document.getElementById("header-automerge-text");
-    const overviewToggle = document.getElementById("onboarding-automerge-toggle");
-    const overviewText = document.getElementById("onboarding-automerge-text");
+    const headerLabel = document.getElementById("header-automerge-label");
+    const onboardingToggle = document.getElementById("onboarding-automerge-toggle");
+    const onboardingLabel = document.getElementById("onboarding-automerge-label");
+    const dashStatusPill = document.getElementById("dash-automerge-status-pill");
 
-    if (headerToggle) headerToggle.checked = enabled;
-    if (headerText) headerText.textContent = enabled ? "AUTO-MERGE: ON" : "AUTO-MERGE: OFF";
+    if (headerToggle) headerToggle.checked = autoMergeEnabled;
+    if (onboardingToggle) onboardingToggle.checked = autoMergeEnabled;
 
-    if (overviewToggle) overviewToggle.checked = enabled;
-    if (overviewText) overviewText.textContent = enabled ? "ENABLED (Recommended)" : "MANUAL REVIEW";
+    if (headerLabel) {
+        headerLabel.textContent = autoMergeEnabled ? "AUTO-MERGE: ON" : "AUTO-MERGE: OFF";
+        headerLabel.style.color = autoMergeEnabled ? "var(--accent-sage)" : "var(--text-muted)";
+    }
+
+    if (onboardingLabel) {
+        onboardingLabel.textContent = autoMergeEnabled ? "AUTO-MERGE: ON" : "AUTO-MERGE: OFF";
+        onboardingLabel.style.color = autoMergeEnabled ? "var(--accent-sage)" : "var(--text-muted)";
+    }
+
+    if (dashStatusPill) {
+        if (autoMergeEnabled) {
+            dashStatusPill.textContent = "Auto-Merge Active";
+            dashStatusPill.style.color = "var(--accent-sage)";
+            dashStatusPill.style.background = "var(--sage-bg)";
+            dashStatusPill.style.borderColor = "var(--sage-border)";
+        } else {
+            dashStatusPill.textContent = "Manual Review Mode";
+            dashStatusPill.style.color = "var(--accent-amber)";
+            dashStatusPill.style.background = "var(--amber-bg)";
+            dashStatusPill.style.borderColor = "var(--amber-border)";
+        }
+    }
 }
 
-async function setAutoMergeState(enabled) {
-    updateAutoMergeUI(enabled);
+async function onAutoMergeToggleChanged(checked) {
+    updateAutoMergeUI(checked);
     const savedRepo = localStorage.getItem("launchpad_portfolio_repo") || "";
     try {
         await fetch("/api/portfolio-config", {
@@ -99,21 +121,13 @@ async function setAutoMergeState(enabled) {
             body: JSON.stringify({
                 portfolio_repo: savedRepo,
                 format: "arbitrary",
-                auto_merge: enabled
+                auto_merge: checked
             })
         });
-        showToast(`Auto-Merge is now ${enabled ? "ENABLED" : "DISABLED"}`);
+        showToast(checked ? "Auto-Merge enabled! Verified releases will merge automatically." : "Manual review mode enabled for future releases.");
     } catch (e) {
         console.warn("Failed to persist auto-merge state to server:", e);
     }
-}
-
-function onHeaderAutoMergeToggle(event) {
-    setAutoMergeState(event.target.checked);
-}
-
-function onOverviewAutoMergeToggle(event) {
-    setAutoMergeState(event.target.checked);
 }
 
 // ── Connected Portfolio Target Repo Logic ─────────────────────────────
