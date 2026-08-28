@@ -1692,13 +1692,12 @@ input:checked + .toggle-slider:before {
     background: #1E293B;
 }
 
-/* ── Top-Pinned Action Bar in Post Card ──────────────────────── */
+/* ── Top-Pinned Action Bar in Post Card (2-Tier Clean Layout) ── */
 .post-action-pinned-header {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
     gap: 12px;
-    padding: 14px 20px;
+    padding: 16px 20px;
     background: #FFFFFF;
     border-bottom: 1px solid var(--border-subtle);
     border-radius: 8px 8px 0 0;
@@ -1707,27 +1706,38 @@ input:checked + .toggle-slider:before {
     z-index: 10;
 }
 
+.post-header-top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+}
+
 .post-action-btn-group {
     display: flex;
     align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+    gap: 10px;
+    width: 100%;
 }
 
 .btn-copy-post {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
+    flex: 2;
     background: #15803D;
     color: #FFFFFF;
     font-weight: 600;
-    font-size: 13.5px;
-    padding: 9px 16px;
+    font-size: 13px;
+    padding: 9px 14px;
     border-radius: var(--radius-sm);
     border: 1px solid #166534;
     cursor: pointer;
     transition: all 0.2s ease;
     font-family: var(--font-sans);
+    white-space: nowrap;
 }
 
 .btn-copy-post:hover {
@@ -1739,22 +1749,31 @@ input:checked + .toggle-slider:before {
 .btn-copy-image {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
+    flex: 1;
     background: #FFFFFF;
     color: var(--text-primary);
     font-weight: 600;
-    font-size: 12.5px;
-    padding: 9px 14px;
+    font-size: 12px;
+    padding: 9px 12px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-strong);
     cursor: pointer;
     transition: all 0.2s ease;
     font-family: var(--font-sans);
+    white-space: nowrap;
 }
 
 .btn-copy-image:hover {
     border-color: var(--text-primary);
     background: var(--bg-surface-elevated);
+}
+
+.badge-pill,
+.decision-badge,
+.decision-version-tag {
+    white-space: nowrap !important;
 }
 
 /* ── Streaming Typewriter Cursor ─────────────────────────────── */

@@ -7,7 +7,10 @@ let selectedDeliveryId = null;
 let currentPostPackage = null;
 let autoMergeEnabled = true;
 let activeStreamInterval = null;
-let lastKnownDecisionsCount = 0;
+let isAgentCurrentlyRunning = false;
+let agentRunStartTime = null;
+let agentTimerInterval = null;
+let lastSeenDecisionId = null;
 
 // ── Tab Switching Navigation ──────────────────────────────────────────
 function switchTab(tabName) {
@@ -57,90 +60,74 @@ window.copyPostContent = copyPostContent;
 window.copyPostImage = copyPostImage;
 window.editPostContent = editPostContent;
 
-// ── Auto-Merge Toggle Synchronization ─────────────────────────────────
+// ── Portfolio Configuration State & Persistence ──────────────────────
 async function loadAutoMergeConfig() {
     try {
         const resp = await fetch("/api/portfolio-config");
         if (resp.ok) {
             const data = await resp.json();
             if (data && typeof data.auto_merge === "boolean") {
-                autoMergeEnabled = data.auto_merge;
-            }
-            if (data && data.portfolio_repo) {
-                localStorage.setItem("launchpad_portfolio_repo", data.portfolio_repo);
+                updateAutoMergeUI(data.auto_merge);
             }
         }
     } catch (e) {
-        console.warn("Could not fetch portfolio config:", e);
+        console.warn("Could not fetch portfolio config for auto-merge toggle:", e);
     }
-    updateAutoMergeUI(autoMergeEnabled);
 }
 
 function updateAutoMergeUI(enabled) {
     autoMergeEnabled = enabled;
-
     const headerToggle = document.getElementById("header-automerge-toggle");
-    const onboardingToggle = document.getElementById("onboarding-automerge-toggle");
-    const headerLabel = document.getElementById("header-automerge-label");
-    const dashStatusPill = document.getElementById("dash-automerge-status-pill");
+    const headerText = document.getElementById("header-automerge-text");
+    const overviewToggle = document.getElementById("onboarding-automerge-toggle");
+    const overviewText = document.getElementById("onboarding-automerge-text");
 
     if (headerToggle) headerToggle.checked = enabled;
-    if (onboardingToggle) onboardingToggle.checked = enabled;
+    if (headerText) headerText.textContent = enabled ? "AUTO-MERGE: ON" : "AUTO-MERGE: OFF";
 
-    if (headerLabel) {
-        headerLabel.textContent = enabled ? "AUTO-MERGE: ON" : "AUTO-MERGE: OFF";
-        headerLabel.style.color = enabled ? "var(--accent-sage)" : "var(--text-muted)";
-    }
-
-    if (dashStatusPill) {
-        if (enabled) {
-            dashStatusPill.textContent = "Auto-Merge Active";
-            dashStatusPill.style.color = "var(--accent-sage)";
-            dashStatusPill.style.background = "var(--sage-bg)";
-            dashStatusPill.style.borderColor = "var(--sage-border)";
-        } else {
-            dashStatusPill.textContent = "Manual Review Mode";
-            dashStatusPill.style.color = "var(--accent-amber)";
-            dashStatusPill.style.background = "var(--amber-bg)";
-            dashStatusPill.style.borderColor = "var(--amber-border)";
-        }
-    }
+    if (overviewToggle) overviewToggle.checked = enabled;
+    if (overviewText) overviewText.textContent = enabled ? "ENABLED (Recommended)" : "MANUAL REVIEW";
 }
 
-async function onAutoMergeToggleChanged(checked) {
-    updateAutoMergeUI(checked);
-    const repoSlug = localStorage.getItem("launchpad_portfolio_repo") || "";
-
+async function setAutoMergeState(enabled) {
+    updateAutoMergeUI(enabled);
+    const savedRepo = localStorage.getItem("launchpad_portfolio_repo") || "";
     try {
         await fetch("/api/portfolio-config", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                portfolio_repo: repoSlug,
+                portfolio_repo: savedRepo,
                 format: "arbitrary",
-                auto_merge: checked
+                auto_merge: enabled
             })
         });
-        showToast(checked ? "Auto-Merge enabled! Verified releases will merge hands-free." : "Manual review mode enabled for future releases.");
-    } catch (err) {
-        console.error("Failed to update auto_merge config:", err);
-        showToast("Error updating configuration");
+        showToast(`Auto-Merge is now ${enabled ? "ENABLED" : "DISABLED"}`);
+    } catch (e) {
+        console.warn("Failed to persist auto-merge state to server:", e);
     }
 }
 
-// ── Portfolio Repo Connector ──────────────────────────────────────────
+function onHeaderAutoMergeToggle(event) {
+    setAutoMergeState(event.target.checked);
+}
+
+function onOverviewAutoMergeToggle(event) {
+    setAutoMergeState(event.target.checked);
+}
+
+// ── Connected Portfolio Target Repo Logic ─────────────────────────────
 function parseRepoSlug(input) {
     if (!input) return "";
-    let clean = input.trim().replace(/^https?:\/\/github\.com\//i, "").replace(/\/$/, "").replace(/\.git$/i, "");
-    const parts = clean.split("/").filter(Boolean);
-    if (parts.length >= 2) {
-        return `${parts[0]}/${parts[1]}`;
-    }
+    let clean = input.trim();
+    clean = clean.replace(/^https?:\/\/(www\.)?github\.com\//i, "");
+    clean = clean.replace(/\.git$/i, "");
+    clean = clean.replace(/\/+$/, "");
     return clean;
 }
 
 async function loadConnectedPortfolioRepo() {
-    let saved = localStorage.getItem("launchpad_portfolio_repo");
+    let saved = localStorage.getItem("launchpad_portfolio_repo") || "";
     try {
         const resp = await fetch("/api/portfolio-config");
         if (resp.ok) {
@@ -244,71 +231,93 @@ function toggleTerminalExpansion() {
     }
 }
 
-// ── 6-Stage Live Terminal Progress Execution ──────────────────────────
-function triggerTerminalProgression(action, isAutoMerged) {
-    const panel = document.getElementById("terminal-expanded-panel");
-    const standby = document.getElementById("terminal-standby-bar");
-    const timerBadge = document.getElementById("terminal-timer-badge");
-    const equalizer = document.getElementById("model-equalizer-bars");
+// ── Real-Time Agent Telemetry Polling (/api/agent-status) ────────────
+async function pollAgentStatus() {
+    try {
+        const resp = await fetch("/api/agent-status");
+        if (!resp.ok) return;
+        const statusData = await resp.json();
 
-    if (!panel || !standby) return;
+        const panel = document.getElementById("terminal-expanded-panel");
+        const standby = document.getElementById("terminal-standby-bar");
+        const timerBadge = document.getElementById("terminal-timer-badge");
+        const equalizer = document.getElementById("model-equalizer-bars");
 
-    panel.style.display = "block";
-    standby.style.display = "none";
-    if (equalizer) equalizer.classList.add("pulsing");
+        if (statusData && statusData.status === "running") {
+            if (!isAgentCurrentlyRunning) {
+                isAgentCurrentlyRunning = true;
+                agentRunStartTime = Date.now();
+                if (panel) panel.style.display = "block";
+                if (standby) standby.style.display = "none";
+                if (equalizer) equalizer.classList.add("pulsing");
 
-    const stageItems = [
-        document.getElementById("stage-1"),
-        document.getElementById("stage-2"),
-        document.getElementById("stage-3"),
-        document.getElementById("stage-4"),
-        document.getElementById("stage-5"),
-        document.getElementById("stage-6")
-    ];
+                if (agentTimerInterval) clearInterval(agentTimerInterval);
+                agentTimerInterval = setInterval(() => {
+                    if (timerBadge && agentRunStartTime) {
+                        const elapsed = ((Date.now() - agentRunStartTime) / 1000).toFixed(1);
+                        timerBadge.textContent = `${elapsed}s elapsed`;
+                    }
+                }, 100);
+            }
 
-    // Reset stages
-    stageItems.forEach((el, i) => {
-        if (!el) return;
-        el.className = "terminal-stage-item " + (i === 0 ? "active" : "pending");
-    });
+            const currentStage = statusData.stage || 1;
+            const stageItems = [
+                document.getElementById("stage-1"),
+                document.getElementById("stage-2"),
+                document.getElementById("stage-3"),
+                document.getElementById("stage-4"),
+                document.getElementById("stage-5"),
+                document.getElementById("stage-6")
+            ];
 
-    const stage5Label = document.getElementById("stage-5-label");
-    if (stage5Label) {
-        if (action === "skip") {
-            stage5Label.textContent = "Portfolio Preserved";
-        } else if (isAutoMerged) {
-            stage5Label.textContent = "PR Auto-Merged ✓";
-        } else {
-            stage5Label.textContent = "Review PR Opened";
+            stageItems.forEach((el, idx) => {
+                if (!el) return;
+                const stageNum = idx + 1;
+                if (stageNum < currentStage) {
+                    el.className = "terminal-stage-item done";
+                } else if (stageNum === currentStage) {
+                    el.className = "terminal-stage-item active";
+                } else {
+                    el.className = "terminal-stage-item pending";
+                }
+            });
+        } else if (isAgentCurrentlyRunning && (!statusData || statusData.status === "idle")) {
+            // Finished execution!
+            isAgentCurrentlyRunning = false;
+            if (agentTimerInterval) clearInterval(agentTimerInterval);
+
+            const stageItems = [
+                document.getElementById("stage-1"),
+                document.getElementById("stage-2"),
+                document.getElementById("stage-3"),
+                document.getElementById("stage-4"),
+                document.getElementById("stage-5"),
+                document.getElementById("stage-6")
+            ];
+            stageItems.forEach(el => {
+                if (el) el.className = "terminal-stage-item done";
+            });
+
+            if (equalizer) equalizer.classList.remove("pulsing");
+            const totalElapsed = agentRunStartTime ? ((Date.now() - agentRunStartTime) / 1000).toFixed(1) : "3.8";
+            if (timerBadge) timerBadge.textContent = `✓ Done in ${totalElapsed}s`;
+
+            // Reload decisions immediately to show the new card & stream post
+            await loadDecisions();
+
+            // Auto-collapse after 6 seconds
+            setTimeout(() => {
+                if (!isAgentCurrentlyRunning) {
+                    if (panel) panel.style.display = "none";
+                    if (standby) standby.style.display = "flex";
+                    const standbyAction = document.getElementById("terminal-standby-action");
+                    if (standbyAction) standbyAction.textContent = `View last run logs (${totalElapsed}s) ▾`;
+                }
+            }, 6000);
         }
+    } catch (e) {
+        console.warn("Could not poll agent status:", e);
     }
-
-    let startTime = Date.now();
-    let timerInterval = setInterval(() => {
-        let elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-        if (timerBadge) timerBadge.textContent = `${elapsed}s elapsed`;
-    }, 100);
-
-    // Sequence stages
-    setTimeout(() => { if (stageItems[0]) stageItems[0].className = "terminal-stage-item done"; if (stageItems[1]) stageItems[1].className = "terminal-stage-item active"; }, 600);
-    setTimeout(() => { if (stageItems[1]) stageItems[1].className = "terminal-stage-item done"; if (stageItems[2]) stageItems[2].className = "terminal-stage-item active"; }, 1300);
-    setTimeout(() => { if (stageItems[2]) stageItems[2].className = "terminal-stage-item done"; if (stageItems[3]) stageItems[3].className = "terminal-stage-item active"; }, 2000);
-    setTimeout(() => { if (stageItems[3]) stageItems[3].className = "terminal-stage-item done"; if (stageItems[4]) stageItems[4].className = "terminal-stage-item active"; }, 2700);
-    setTimeout(() => { if (stageItems[4]) stageItems[4].className = "terminal-stage-item done"; if (stageItems[5]) stageItems[5].className = "terminal-stage-item active"; }, 3400);
-    setTimeout(() => {
-        if (stageItems[5]) stageItems[5].className = "terminal-stage-item done";
-        clearInterval(timerInterval);
-        if (timerBadge) timerBadge.textContent = `✓ Done in 3.8s`;
-        if (equalizer) equalizer.classList.remove("pulsing");
-
-        // Auto-collapse to standby bar after 5 seconds
-        setTimeout(() => {
-            panel.style.display = "none";
-            standby.style.display = "flex";
-            const standbyAction = document.getElementById("terminal-standby-action");
-            if (standbyAction) standbyAction.textContent = "View last run logs (3.8s) ▾";
-        }, 5000);
-    }, 3800);
 }
 
 // ── Agent Voice Narration Helper ──────────────────────────────────────
@@ -337,23 +346,30 @@ async function loadDecisions() {
         if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
         const decisions = await resp.json();
 
-        // Check if a new release just arrived
-        if (decisions.length > lastKnownDecisionsCount && lastKnownDecisionsCount > 0) {
+        if (decisions && decisions.length > 0) {
             const latest = decisions[0];
-            const isMerged = latest.artifacts && latest.artifacts.portfolio_pr_merged;
-            triggerTerminalProgression(latest.action, isMerged);
-            selectedDeliveryId = latest.delivery_id;
-            streamPostText(latest, true);
-        }
+            const latestId = latest.delivery_id || latest.id || (latest.repo + "_" + (latest.tag || "") + "_" + (latest.ts || ""));
 
-        lastKnownDecisionsCount = decisions.length;
-        allDecisions = decisions;
-        renderDecisions(decisions);
-
-        // Pre-select latest decision on initial load
-        if (!selectedDeliveryId && decisions.length > 0) {
-            selectedDeliveryId = decisions[0].delivery_id;
-            renderActivePostWorkspace(decisions[0], false);
+            if (lastSeenDecisionId && lastSeenDecisionId !== latestId) {
+                // A new release arrived! Select it and trigger typewriter stream
+                selectedDeliveryId = latestId;
+                allDecisions = decisions;
+                renderDecisions(decisions);
+                streamPostText(latest, true);
+            } else if (!selectedDeliveryId) {
+                // Initial load
+                selectedDeliveryId = latestId;
+                allDecisions = decisions;
+                renderDecisions(decisions);
+                renderActivePostWorkspace(latest, false);
+            } else {
+                allDecisions = decisions;
+                renderDecisions(decisions);
+            }
+            lastSeenDecisionId = latestId;
+        } else {
+            allDecisions = [];
+            renderDecisions([]);
         }
     } catch (err) {
         console.error("Failed to fetch decisions:", err);
@@ -772,9 +788,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Initial data fetch
     loadDecisions();
+    pollAgentStatus();
 
-    // Adaptive live polling (every 3 seconds for instant demo updates)
+    // Real-time telemetry polling (every 1.5s for instant stage updates)
     setInterval(() => {
-        loadDecisions();
+        pollAgentStatus();
+    }, 1500);
+
+    // Adaptive decisions polling (every 3s)
+    setInterval(() => {
+        if (!isAgentCurrentlyRunning) {
+            loadDecisions();
+        }
     }, 3000);
 });

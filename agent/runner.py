@@ -76,11 +76,29 @@ def run_agent(event: dict) -> dict:
         delivery_id,
     )
 
+    try:
+        memory.set_agent_status({
+            "status": "running",
+            "stage": 1,
+            "stage_name": "Webhook Received",
+            "repo": repo,
+            "tag": event.get("tag", ""),
+            "delivery_id": delivery_id,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:
+        pass
+
     # Auto-bootstrap profile from GitHub if missing (before curator runs,
     # because the curator consumes context/profile).
     from agent.subagents.profile_bootstrapper import ensure_profile
 
     ensure_profile(event)
+
+    try:
+        memory.set_agent_status({"stage": 2, "stage_name": "Profiling Repo"})
+    except Exception:
+        pass
 
     profile = analyze_release(event)
 
@@ -88,6 +106,12 @@ def run_agent(event: dict) -> dict:
         "featured_projects": memory.list_projects(),
         "context_profile": memory.get_context_profile(),
     }
+
+    try:
+        memory.set_agent_status({"stage": 3, "stage_name": "Gemini 3.5 Deciding"})
+    except Exception:
+        pass
+
     decision = curate(profile, memory_context, delivery_id)
 
     artifacts: dict = {}
@@ -108,6 +132,56 @@ def run_agent(event: dict) -> dict:
                 "ts": datetime.now(timezone.utc).isoformat(),
             },
         )
+
+        try:
+            memory.set_agent_status({"stage": 4, "stage_name": "Splicing Codebase"})
+        except Exception:
+            pass
+
+        pr_number = None
+        pr_repo = None
+        pr_mode = None
+        pr_auto_merge_suppressed = False
+        try:
+            pr = publish_to_portfolio(
+                repo, profile, decision, artifacts.get("post_package", {}), delivery_id, event.get("tag", "")
+            )
+            if pr is not None:
+                artifacts["portfolio_pr"] = pr["url"]
+                artifacts["portfolio_mode"] = pr["mode"]
+                pr_number = pr["number"]
+                pr_repo = pr["portfolio_repo"]
+                pr_mode = pr["mode"]
+                pr_auto_merge_suppressed = pr.get("auto_merge_suppressed", False)
+        except Exception:
+            logger.error(
+                "portfolio_publisher failed for delivery=%s — post package (if any) is unaffected",
+                delivery_id,
+                exc_info=True,
+            )
+
+        if pr_number is not None:
+            artifacts["portfolio_pr_merged"] = False
+            if not pr_auto_merge_suppressed and config.get_portfolio_auto_merge():
+                try:
+                    memory.set_agent_status({"stage": 5, "stage_name": "Auto-Merging PR"})
+                except Exception:
+                    pass
+                try:
+                    merge_result = github_merge_pr(pr_repo, pr_number)
+                    artifacts["portfolio_pr_merged"] = merge_result["merged"]
+                    artifacts["portfolio_pr_sha"] = merge_result["sha"]
+                except Exception:
+                    logger.error(
+                        "auto-merge failed for delivery=%s — PR left open for manual merge",
+                        delivery_id,
+                        exc_info=True,
+                    )
+
+        try:
+            memory.set_agent_status({"stage": 6, "stage_name": "Staging LinkedIn Post"})
+        except Exception:
+            pass
 
         draft = None
         try:
@@ -155,69 +229,7 @@ def run_agent(event: dict) -> dict:
                     exc_info=True,
                 )
 
-        pr_number = None
-        pr_repo = None
-        pr_mode = None
-        pr_auto_merge_suppressed = False
-        try:
-            pr = publish_to_portfolio(
-                repo, profile, decision, artifacts.get("post_package", {}), delivery_id, event.get("tag", "")
-            )
-            # publish() returns None (not an exception) when no portfolio
-            # repo is configured yet — an expected state, already logged
-            # at INFO inside portfolio_publisher. Nothing to merge either.
-            # This covers BOTH paths inside publish() (convention and Tier
-            # 2 arbitrary) — a failure or a None in either one is handled
-            # identically here; pr["mode"] is what tells them apart below.
-            if pr is not None:
-                artifacts["portfolio_pr"] = pr["url"]
-                artifacts["portfolio_mode"] = pr["mode"]
-                pr_number = pr["number"]
-                pr_repo = pr["portfolio_repo"]
-                pr_mode = pr["mode"]
-                pr_auto_merge_suppressed = pr.get("auto_merge_suppressed", False)
-        except Exception:
-            logger.error(
-                "portfolio_publisher failed for delivery=%s — post package (if any) is unaffected",
-                delivery_id,
-                exc_info=True,
-            )
-
-        # Separate try/except from opening the PR above: opening and
-        # merging are independent outcomes. A merge failure (branch
-        # protection, conflicts, permissions) must never lose the
-        # already-open PR or the post_package built earlier. Only ever
-        # merges the exact PR this run just opened, on the repo it was
-        # actually opened on (pr_repo — the portfolio repo, NOT `repo`,
-        # which is the source release repo the webhook fired for) —
-        # never looks up or touches any other PR.
-        #
-        # HARD INVARIANT: Tier 2 arbitrary-repo PRs (pr_mode in
-        # "arbitrary_high"/"arbitrary_low") NEVER auto-merge, regardless of
-        # config.get_portfolio_auto_merge() — they either edit unreviewed
-        # site code or drop content nobody's placed yet, and always need a
-        # human look. The convention path is ALSO suppressed for exactly
-        # one case: its own first (bootstrap) write when format was never
-        # explicitly confirmed via the picker (see portfolio_publisher.py's
-        # confidence check) — pr["auto_merge_suppressed"] carries that
-        # signal the same way Tier 2 always sets it.
-        if pr_number is not None:
-            artifacts["portfolio_pr_merged"] = False
-            if not pr_auto_merge_suppressed and config.get_portfolio_auto_merge():
-                try:
-                    merge_result = github_merge_pr(pr_repo, pr_number)
-                    artifacts["portfolio_pr_merged"] = merge_result["merged"]
-                    artifacts["portfolio_pr_sha"] = merge_result["sha"]
-                except Exception:
-                    logger.error(
-                        "auto-merge failed for delivery=%s — PR left open for manual merge",
-                        delivery_id,
-                        exc_info=True,
-                    )
-
-        # Pure byproduct, last step: reads only the already-fetched
-        # memory_context, writes only its own artifacts key. A failure here
-        # cannot touch the decision, post_package, or portfolio_pr above.
+        # Pure byproduct, last step
         try:
             artifacts["next_builds"] = suggest_next_builds(
                 memory_context["featured_projects"], memory_context["context_profile"]
@@ -238,13 +250,18 @@ def run_agent(event: dict) -> dict:
         "verified": None,
     }
 
-    # decisions/{delivery_id} needs a real "ts" for the dashboard's
-    # order_by("ts") queries (/api/decisions, /api/latest-post) to return it
-    # at all — Firestore excludes documents missing an ordered field
-    # entirely. SERVER_TIMESTAMP matches server.py's own idempotency-write
-    # pattern, but it's a write-only sentinel: it can't go through
-    # json.dumps() in the value this function returns to the caller, so the
-    # Firestore write and the returned dict use two different "ts" values.
     memory.save_decision(delivery_id, {**record, "ts": firestore.SERVER_TIMESTAMP})
     memory.mark_delivery_processed(delivery_id)
+
+    try:
+        memory.set_agent_status({
+            "status": "idle",
+            "stage": 6,
+            "last_delivery_id": delivery_id,
+            "action": decision["action"],
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:
+        pass
+
     return {**record, "ts": datetime.now(timezone.utc).isoformat()}
