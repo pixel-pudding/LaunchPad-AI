@@ -12,7 +12,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="/static/dashboard.css?v=33">
+    <link rel="stylesheet" href="/static/dashboard.css?v=34">
 </head>
 
 <body>
@@ -341,19 +341,24 @@
         <div class="view-content">
 
             <!-- ── Top Live Agent Activity Execution Panel ─────────── -->
-            <div id="live-terminal-container">
-                <!-- Expanded Terminal State (Shown while processing) -->
-                <div class="live-terminal-panel" id="terminal-expanded-panel" style="display:none;">
-                    <div class="terminal-header">
-                        <div class="terminal-title-group">
-                            <span class="dot-indicator pulse"></span>
-                            <span>AGENT RUNNING · <strong>PROCESSING GITHUB RELEASE</strong></span>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:12px;">
-                            <span id="terminal-timer-badge" class="font-mono-lp" style="color: #4ADE80;">0.0s elapsed</span>
-                            <button class="font-mono-lp" onclick="toggleTerminalExpansion()" style="background:rgba(255,255,255,0.08); border:1px solid #334155; color:#94A3B8; border-radius:4px; padding:3px 8px; font-size:11px; cursor:pointer;" title="Collapse execution logs">Collapse logs ▴</button>
-                        </div>
+            <div id="live-terminal-container" class="live-terminal-container">
+                <!-- Main Header (Always visible: displays true RUNNING or STANDBY status) -->
+                <div class="terminal-main-header" onclick="toggleTerminalExpansion()">
+                    <div class="terminal-title-group" style="display:flex; align-items:center; gap:8px;">
+                        <span class="dot-indicator" id="terminal-status-dot" style="background:#22C55E;"></span>
+                        <span id="terminal-status-title" style="color:#F8FAFC; font-weight:600;">AGENT STANDBY</span>
+                        <span id="terminal-status-desc" style="color:#94A3B8;">· Watching connected GitHub repositories for tagged releases</span>
                     </div>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <span id="terminal-timer-badge" class="font-mono-lp" style="color: #4ADE80; display:none;">0.0s elapsed</span>
+                        <button class="font-mono-lp btn-terminal-toggle" id="btn-terminal-toggle" onclick="event.stopPropagation(); toggleTerminalExpansion();">
+                            View execution logs ▾
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Collapsible Stages Grid (Toggled independently from execution status) -->
+                <div class="terminal-stages-collapsible" id="terminal-stages-collapsible" style="display:none;">
                     <div class="terminal-stages-grid" id="terminal-stages-grid">
                         <div class="terminal-stage-item" id="stage-1">
                             <span class="stage-num font-mono-lp">01 / INGEST</span>
@@ -380,16 +385,6 @@
                             <span class="stage-label" id="stage-6-label">Staging Post</span>
                         </div>
                     </div>
-                </div>
-
-                <!-- Standby 1-Line Bar (Shown when idle) -->
-                <div class="terminal-standby-bar" id="terminal-standby-bar" onclick="toggleTerminalExpansion()">
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <span class="dot-indicator pulse" style="background:#22C55E;"></span>
-                        <span style="color:#F8FAFC; font-weight:600;">AGENT STANDBY</span>
-                        <span style="color:#94A3B8;">· Watching connected GitHub repositories for tagged releases</span>
-                    </div>
-                    <span style="color:#4ADE80; font-size:11px;" id="terminal-standby-action">View execution logs ▾</span>
                 </div>
             </div>
 
@@ -521,7 +516,7 @@
         </div>
     </footer>
 
-    <script src="/static/dashboard.js?v=33"></script>
+    <script src="/static/dashboard.js?v=34"></script>
 </body>
 
 </html>
