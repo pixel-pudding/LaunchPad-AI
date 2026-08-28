@@ -12,7 +12,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="/static/dashboard.css?v=31">
+    <link rel="stylesheet" href="/static/dashboard.css?v=32">
 </head>
 
 <body>
@@ -442,14 +442,19 @@
                     <!-- Post Review Card -->
                     <div class="sidebar-card post-review-card" id="post-review-card" style="padding:0; overflow:hidden;">
                         
-                        <!-- Top-Pinned Action Header (0px Scrolling Solution!) -->
+                        <!-- Top-Pinned Action Header (2-Tier Clean Layout) -->
                         <div class="post-action-pinned-header">
-                            <div class="card-title-group" style="display:flex; align-items:center; gap:8px;">
-                                <span class="font-mono-lp card-kicker" style="font-size:11px; font-weight:700; color:var(--text-secondary);">LAUNCH PACKAGE</span>
-                                <span class="decision-badge font-mono-lp" id="post-action-badge" style="display:none;">READY</span>
-                                <span class="font-mono-lp post-repo-name" id="post-repo" style="font-weight:600; font-size:13px;"></span>
+                            <!-- Tier 1: Title & Badges Row (100% width, never wraps) -->
+                            <div class="post-header-top-row">
+                                <div class="card-title-group" style="display:flex; align-items:center; gap:8px; flex-wrap:nowrap; overflow:hidden;">
+                                    <span class="font-mono-lp card-kicker" style="font-size:11px; font-weight:700; color:var(--text-secondary); white-space:nowrap;">LAUNCH PACKAGE</span>
+                                    <span class="decision-badge font-mono-lp" id="post-action-badge" style="display:none; white-space:nowrap;">READY</span>
+                                    <span class="font-mono-lp post-repo-name" id="post-repo" style="font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></span>
+                                </div>
+                                <span id="post-restraint-badge" class="badge-pill font-mono-lp" style="display:none; background:#F1F5F9; color:#475569; border-color:#CBD5E1; font-weight:600; white-space:nowrap;">🛡️ EDITORIAL RESTRAINT</span>
                             </div>
 
+                            <!-- Tier 2: Dedicated Horizontal Action Toolbar -->
                             <div class="post-action-btn-group" id="post-action-btn-group">
                                 <button class="btn-copy-post font-mono-lp" id="btn-copy" onclick="copyPostContent()">
                                     📋 Copy post & Open LinkedIn
@@ -457,11 +462,10 @@
                                 <button class="btn-copy-image font-mono-lp" id="btn-copy-img" onclick="copyPostImage()" title="Copy live screenshot to clipboard">
                                     🖼️ Copy Image
                                 </button>
-                                <button class="sidebar-collapse-btn font-mono-lp" onclick="editPostContent()" id="btn-edit-post">
-                                    Edit
+                                <button class="sidebar-collapse-btn font-mono-lp" onclick="editPostContent()" id="btn-edit-post" style="padding: 10px 14px;">
+                                    ✏️ Edit
                                 </button>
                             </div>
-                            <span id="post-restraint-badge" class="badge-pill font-mono-lp" style="display:none; background:#F1F5F9; color:#475569; border-color:#CBD5E1; font-weight:600;">🛡️ EDITORIAL RESTRAINT</span>
                         </div>
 
                         <!-- Empty state when no posts -->
@@ -516,7 +520,7 @@
         </div>
     </footer>
 
-    <script src="/static/dashboard.js?v=31"></script>
+    <script src="/static/dashboard.js?v=32"></script>
 </body>
 
 </html>
