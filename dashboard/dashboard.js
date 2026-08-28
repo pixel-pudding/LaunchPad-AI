@@ -362,10 +362,6 @@ async function pollAgentStatus() {
         console.warn("Could not poll agent status:", e);
     }
 }
-    } catch (e) {
-        console.warn("Could not poll agent status:", e);
-    }
-}
 
 // ── Agent Voice Narration Helper ──────────────────────────────────────
 function formatAgentVoice(decision) {
