@@ -12,7 +12,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="/static/dashboard.css?v=29">
+    <link rel="stylesheet" href="/static/dashboard.css?v=30">
 </head>
 
 <body>
@@ -348,7 +348,10 @@
                             <span class="dot-indicator pulse"></span>
                             <span>AGENT RUNNING · <strong>PROCESSING GITHUB RELEASE</strong></span>
                         </div>
-                        <span id="terminal-timer-badge" class="font-mono-lp" style="color: #4ADE80;">0.0s elapsed</span>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <span id="terminal-timer-badge" class="font-mono-lp" style="color: #4ADE80;">0.0s elapsed</span>
+                            <button class="font-mono-lp" onclick="toggleTerminalExpansion()" style="background:rgba(255,255,255,0.08); border:1px solid #334155; color:#94A3B8; border-radius:4px; padding:3px 8px; font-size:11px; cursor:pointer;" title="Collapse execution logs">Collapse logs ▴</button>
+                        </div>
                     </div>
                     <div class="terminal-stages-grid" id="terminal-stages-grid">
                         <div class="terminal-stage-item" id="stage-1">
@@ -447,7 +450,7 @@
                                 <span class="font-mono-lp post-repo-name" id="post-repo" style="font-weight:600; font-size:13px;"></span>
                             </div>
 
-                            <div class="post-action-btn-group">
+                            <div class="post-action-btn-group" id="post-action-btn-group">
                                 <button class="btn-copy-post font-mono-lp" id="btn-copy" onclick="copyPostContent()">
                                     📋 Copy post & Open LinkedIn
                                 </button>
@@ -458,6 +461,7 @@
                                     Edit
                                 </button>
                             </div>
+                            <span id="post-restraint-badge" class="badge-pill font-mono-lp" style="display:none; background:#F1F5F9; color:#475569; border-color:#CBD5E1; font-weight:600;">🛡️ EDITORIAL RESTRAINT</span>
                         </div>
 
                         <!-- Empty state when no posts -->
@@ -512,7 +516,7 @@
         </div>
     </footer>
 
-    <script src="/static/dashboard.js?v=29"></script>
+    <script src="/static/dashboard.js?v=30"></script>
 </body>
 
 </html>
