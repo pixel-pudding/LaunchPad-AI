@@ -82,6 +82,7 @@ You must handle two actions based on the action field in the payload:
      - Set entry_snippet: The newly crafted project entry matching the codebase's existing style and structure.
      - If new_project.demo_url is provided and non-empty, include the Live link alongside GitHub repo. If demo_url is empty, only render the GitHub link.
      - If new_project.image_url is provided, use it directly as the image src in <img src="..." /> or image property.
+     - In tags / stack chips, render 2 to 4 rich tags prioritizing meaningful frameworks, architectural concepts, and tools from project.stack (e.g., TypeScript, React, Next.js, WebSockets, OpenTelemetry) matching the style of existing cards in the file.
 
 Also provide full_file_content as the complete updated file.
 Return ONLY structured output matching the schema.
@@ -195,6 +196,28 @@ def _build_edit_prompt(
     repo: str,
 ) -> str:
     action = decision.get("action", "feature_new")
+    raw_stack = profile.get("skill_tags") or profile.get("stack") or []
+    clean_stack = []
+    for s in raw_stack:
+        if str(s).lower() in ("python-packaging", "ci-cd"):
+            continue
+        if str(s).lower() == "typescript":
+            clean_stack.append("TypeScript")
+        elif str(s).lower() == "javascript":
+            clean_stack.append("JavaScript")
+        elif str(s).lower() == "html":
+            clean_stack.append("HTML")
+        elif str(s).lower() == "css":
+            clean_stack.append("CSS")
+        elif str(s).lower() == "python":
+            clean_stack.append("Python")
+        elif str(s).lower() == "docker":
+            clean_stack.append("Docker")
+        elif str(s).lower() == "node":
+            clean_stack.append("Node.js")
+        else:
+            clean_stack.append(s)
+
     payload = {
         "action": action,
         "current_file_content": current_content,
@@ -203,7 +226,7 @@ def _build_edit_prompt(
         "project": {
             "name": profile.get("name"),
             "summary": profile.get("summary"),
-            "stack": profile.get("stack"),
+            "stack": clean_stack,
             "positioning": decision.get("positioning"),
             "image_url": post_package.get("image_url"),
             "demo_url": profile.get("demo_url"),

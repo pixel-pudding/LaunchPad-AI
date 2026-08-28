@@ -34,18 +34,49 @@ def analyze_release(event: dict[str, Any]) -> dict[str, Any]:
 import re
 
 
+_TECH_KEYWORD_MAP = {
+    r"\breact(?:\.js|js)?\b": "React",
+    r"\bnext(?:\.js|js)?\b": "Next.js",
+    r"\bvue(?:\.js|js)?\b": "Vue",
+    r"\bangular\b": "Angular",
+    r"\bsvelte\b": "Svelte",
+    r"\bfastapi\b": "FastAPI",
+    r"\bflask\b": "Flask",
+    r"\bdjango\b": "Django",
+    r"\bexpress(?:\.js)?\b": "Express",
+    r"\bnode(?:\.js)?\b": "Node.js",
+    r"\btailwind(?:css)?\b": "Tailwind CSS",
+    r"\bprisma\b": "Prisma",
+    r"\bmongodb\b": "MongoDB",
+    r"\bpostgres(?:ql)?\b": "PostgreSQL",
+    r"\bredis\b": "Redis",
+    r"\bgraphql\b": "GraphQL",
+    r"\bwebsocket(?:s)?\b": "WebSockets",
+    r"\bopentelemetry\b": "OpenTelemetry",
+    r"\bdocker\b": "docker",
+    r"\bgemini\b": "Gemini",
+    r"\bllm(?:s)?\b": "LLMs",
+    r"\bast\b": "AST",
+    r"\bjwt\b": "JWT",
+    r"\bzero-backend\b": "Zero-Backend",
+    r"\btelemetry\b": "Telemetry",
+}
+
+
 def build_profile(repo_data: dict[str, Any]) -> dict[str, Any]:
     """Pure mapping from raw github_get_repo() output to the profile shape."""
     langs = repo_data.get("langs", [])
     tree = repo_data.get("tree", [])
+    readme = repo_data.get("readme", "")
+    description = repo_data.get("description") or ""
 
     return {
         "name": repo_data.get("name", ""),
         "summary": _derive_summary(repo_data),
         "demo_url": _derive_demo_url(repo_data),
         "stack": [lang.lower() for lang in langs],
-        "skill_tags": _derive_skill_tags(langs, tree),
-        "readme": repo_data.get("readme", ""),
+        "skill_tags": _derive_skill_tags(langs, tree, readme=readme, description=description),
+        "readme": readme,
         "images": repo_data.get("images", []),
     }
 
@@ -76,10 +107,18 @@ def _derive_summary(repo_data: dict[str, Any]) -> str:
     return ""
 
 
-def _derive_skill_tags(langs: list[str], tree: list[str]) -> list[str]:
+def _derive_skill_tags(
+    langs: list[str], tree: list[str], readme: str = "", description: str = ""
+) -> list[str]:
     tags = {lang.lower() for lang in langs}
     for entry in tree:
         tag = _MARKER_TAGS.get(entry)
         if tag:
             tags.add(tag)
+
+    combined_text = f"{description}\n{readme}".lower()
+    for pattern, label in _TECH_KEYWORD_MAP.items():
+        if re.search(pattern, combined_text):
+            tags.add(label)
+
     return sorted(tags)

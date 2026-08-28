@@ -674,12 +674,16 @@ function fadeInPostMedia(pkg, artifacts, decision) {
     }
 
     // Quiet 1-Line Next Build Footnote (Aditi Demotion)
-    if (decision.next_builds && decision.next_builds.length > 0) {
-        const firstRec = decision.next_builds[0];
-        const recText = firstRec.title || firstRec.text || firstRec.reason || "";
-        if (recText) {
+    const nextBuilds = (artifacts && artifacts.next_builds) || decision.next_builds || [];
+    if (nextBuilds && nextBuilds.length > 0) {
+        const firstRec = nextBuilds[0];
+        const recTitle = firstRec.title || firstRec.text || firstRec.name || "";
+        const recReason = firstRec.one_line_reason || firstRec.reason || "";
+        if (recTitle || recReason) {
             footnoteEl.style.display = "block";
-            footnoteEl.innerHTML = `💡 <strong>Byproduct Recommendation:</strong> Based on recent activity, <em>${escapeHtml(recText)}</em> would round out your portfolio footprint.`;
+            footnoteEl.innerHTML = `💡 <strong>Next Build Suggestion:</strong> <em>${escapeHtml(recTitle)}</em>${recReason ? ` — ${escapeHtml(recReason)}` : ""}`;
+        } else {
+            footnoteEl.style.display = "none";
         }
     } else {
         footnoteEl.style.display = "none";
