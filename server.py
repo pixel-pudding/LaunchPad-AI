@@ -187,7 +187,17 @@ async def api_decisions() -> list:
         return results
     except Exception:
         logger.exception("Error fetching decisions")
-        return []
+# ── GET /api/agent-status — Live Execution Status ────────────
+@app.get("/api/agent-status")
+async def api_agent_status() -> dict:
+    """
+    Return current real-time agent execution status for dashboard live terminal.
+    """
+    try:
+        from agent import memory
+        return memory.get_agent_status()
+    except Exception:
+        return {"status": "idle"}
 
 
 # ── GET /api/latest-post — Latest post package for the card ──

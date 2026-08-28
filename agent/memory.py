@@ -147,3 +147,26 @@ def mark_delivery_processed(delivery_id: str, client: firestore.Client | None = 
 def save_decision(delivery_id: str, record: dict[str, Any], client: firestore.Client | None = None) -> None:
     client = client or get_client()
     client.collection("decisions").document(delivery_id).set(record)
+
+
+# ── config/agent_status — real-time live terminal telemetry ──────────────
+
+
+def get_agent_status(client: firestore.Client | None = None) -> dict[str, Any]:
+    """Returns the active or last agent execution status for live terminal telemetry."""
+    client = client or get_client()
+    doc = client.collection("config").document("agent_status").get()
+    if not doc.exists:
+        return {"status": "idle"}
+    data = doc.to_dict()
+    ts = data.get("ts")
+    if ts is not None and hasattr(ts, "isoformat"):
+        data["ts"] = ts.isoformat()
+    return data
+
+
+def set_agent_status(data: dict[str, Any], client: firestore.Client | None = None) -> None:
+    """Updates the real-time agent execution telemetry state."""
+    client = client or get_client()
+    record = {**data, "ts": datetime.now(timezone.utc).isoformat()}
+    client.collection("config").document("agent_status").set(record, merge=True)
