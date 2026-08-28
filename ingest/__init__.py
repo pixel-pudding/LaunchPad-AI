@@ -17,8 +17,7 @@ import os
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Request, Response
-from google.api_core.exceptions import AlreadyExists
-from google.cloud import firestore, pubsub_v1, secretmanager
+from google.cloud import pubsub_v1, secretmanager
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,6 @@ router = APIRouter()
 _publisher: pubsub_v1.PublisherClient | None = None
 _secret_client: secretmanager.SecretManagerServiceClient | None = None
 _webhook_secret: bytes | None = None
-_firestore_client: firestore.Client | None = None
 
 
 def _get_publisher() -> pubsub_v1.PublisherClient:
@@ -36,13 +34,6 @@ def _get_publisher() -> pubsub_v1.PublisherClient:
     if _publisher is None:
         _publisher = pubsub_v1.PublisherClient()
     return _publisher
-
-
-def _get_firestore_client() -> firestore.Client:
-    global _firestore_client
-    if _firestore_client is None:
-        _firestore_client = firestore.Client()
-    return _firestore_client
 
 
 def _get_webhook_secret() -> bytes:
@@ -71,31 +62,6 @@ def _verify_signature(payload: bytes, signature_header: str | None) -> None:
 
     if not hmac.compare_digest(expected, signature_header):
         raise HTTPException(status_code=401, detail="Invalid signature")
-
-
-def _claim_release_once(repo: str, tag: str, release_id: Any) -> bool:
-    """Release-level idempotency safety net, additive to the existing
-    delivery_id-based check: GitHub sends up to three webhooks per release
-    (published/released/created), each with its own X-GitHub-Delivery id,
-    so delivery_id alone can't dedupe them. Keyed on {repo, tag or
-    release_id} instead, so all of a single release's webhooks collide on
-    the same doc.
-
-    Uses Firestore's atomic .create() (raises AlreadyExists if the doc is
-    already there) rather than get().exists followed by set() — GitHub's
-    duplicate webhooks for one release arrive within milliseconds of each
-    other, well inside a check-then-write race window.
-
-    Returns True if this call claimed the doc (caller should proceed),
-    False if it was already claimed (caller should skip).
-    """
-    doc_id = f"release_{repo.replace('/', '__')}_{tag or release_id}"
-    doc_ref = _get_firestore_client().collection("idempotency").document(doc_id)
-    try:
-        doc_ref.create({"processed_at": firestore.SERVER_TIMESTAMP})
-        return True
-    except AlreadyExists:
-        return False
 
 
 def _build_pubsub_message(event: dict[str, Any], delivery_id: str) -> dict[str, Any]:
@@ -162,24 +128,9 @@ async def webhook(
 
     event = json.loads(body)
     action = event.get("action")
-    if action != "published":
-        logger.info("Ignoring release action: %s (only published is processed)", action)
+    if action not in ("published", "released", "created"):
+        logger.info("Ignoring release action: %s (only published/released/created are processed)", action)
         return Response(status_code=200, content=f"ignored release action {action}")
-
-    # 2b. Release-level idempotency safety net (see _claim_release_once) —
-    # behind the published-only filter above, not a replacement for it.
-    repo_full_name = event.get("repository", {}).get("full_name", "")
-    release = event.get("release", {})
-    tag = release.get("tag_name", "")
-    release_id = release.get("id", "")
-    if not _claim_release_once(repo_full_name, tag, release_id):
-        logger.info(
-            "Duplicate release webhook for repo=%s tag=%s (delivery=%s) — already ingested, skipping",
-            repo_full_name,
-            tag,
-            delivery_id,
-        )
-        return Response(status_code=200, content="already ingested")
 
     # 3. Parse and build the Pub/Sub message
     message = _build_pubsub_message(event, delivery_id)
