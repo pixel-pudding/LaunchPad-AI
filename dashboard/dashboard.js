@@ -60,6 +60,7 @@ window.copyPostImage = copyPostImage;
 window.editPostContent = editPostContent;
 window.renderNutshellDemo = renderNutshellDemo;
 window.toggleRowExpand = toggleRowExpand;
+window.toggleActivityFeed = toggleActivityFeed;
 
 // ── Portfolio Configuration State & Persistence ──────────────────────
 async function loadAutoMergeConfig() {
@@ -280,13 +281,16 @@ function renderTerminalHeader() {
     const toggleBtn = document.getElementById("btn-terminal-toggle");
     const timerBadge = document.getElementById("terminal-timer-badge");
     const stagesContainer = document.getElementById("terminal-stages-collapsible");
+    const container = document.getElementById("live-terminal-container");
 
     if (currentAgentExecutionState === "running") {
         if (titleEl) titleEl.textContent = "AGENT RUNNING";
         if (descEl) descEl.textContent = currentRunningRepo ? `· Processing ${currentRunningRepo}` : "· Processing a release";
         if (dotEl) dotEl.className = "dot-indicator pulse";
         if (timerBadge) timerBadge.style.display = "inline-block";
+        if (container) container.classList.add("running");
     } else {
+        if (container) container.classList.remove("running");
         if (titleEl) titleEl.textContent = "AGENT IDLE";
         if (descEl) descEl.textContent = lastRunDuration
             ? `· Last run completed in ${lastRunDuration}`
@@ -494,11 +498,11 @@ function renderTwinCards(decision, shouldAnimateTypewriter) {
         }
         if (pActions) {
             const chip = document.createElement("a");
-            chip.className = "btn-pr-chip font-mono-lp";
+            chip.className = `btn-portfolio-pr font-mono-lp${isAutoMerged ? "" : " review"}`;
             chip.href = artifacts.portfolio_pr;
             chip.target = "_blank";
             chip.rel = "noopener";
-            chip.textContent = isAutoMerged ? "View portfolio PR — merged" : "Open PR for review ↗";
+            chip.textContent = isAutoMerged ? "View merged PR" : "Review PR on GitHub";
             pActions.appendChild(chip);
         }
     } else {
@@ -602,11 +606,22 @@ function renderByproductFootnote(decision) {
         const reason = first.one_line_reason || first.reason || "";
         if (title || reason) {
             footnoteEl.style.display = "block";
-            footnoteEl.textContent = `Byproduct: ${title}${reason ? " — " + reason : ""}`;
+            footnoteEl.innerHTML = `<span class="footnote-label">BYPRODUCT — WHAT TO BUILD NEXT</span>${escapeHtml(title)}${reason ? `<br>${escapeHtml(reason)}` : ""}`;
             return;
         }
     }
     footnoteEl.style.display = "none";
+}
+
+// ── Agent activity feed: collapse the whole feed to focus elsewhere ───
+let isFeedCollapsed = false;
+
+function toggleActivityFeed() {
+    isFeedCollapsed = !isFeedCollapsed;
+    const list = document.getElementById("decision-log");
+    const btn = document.getElementById("btn-feed-collapse");
+    if (list) list.style.display = isFeedCollapsed ? "none" : "flex";
+    if (btn) btn.textContent = isFeedCollapsed ? "Expand ▾" : "Collapse ▴";
 }
 
 // ── Agent activity feed: collapsed one-liners, expand for reasoning ───
@@ -632,7 +647,7 @@ function renderActivityFeed(decisions) {
         const action = d.action || "skip";
         const isExpanded = expandedDeliveryIds.has(key);
         const tsFull = d.ts ? formatTimestamp(d.ts) : "";
-        const tsShort = d.ts ? formatTimeOnly(d.ts) : "";
+        const tsRelative = d.ts ? formatRelativeTime(d.ts) : "";
         const repo = d.repo || "unknown/repo";
         const tag = d.tag ? formatTagLabel(d.tag) : "";
         const summary = summarizeDecision(d);
@@ -646,7 +661,7 @@ function renderActivityFeed(decisions) {
         btn.setAttribute("aria-expanded", isExpanded ? "true" : "false");
         btn.onclick = () => toggleRowExpand(key);
         btn.innerHTML = `
-            <span class="decision-row-time font-mono-lp" title="${escapeHtml(tsFull)}">${escapeHtml(tsShort)}</span>
+            <span class="decision-row-time font-mono-lp" title="${escapeHtml(tsFull)}">${escapeHtml(tsRelative)}</span>
             <span class="decision-badge font-mono-lp badge-${action}">${escapeHtml(actionLabel(action))}</span>
             <span class="decision-repo-name font-mono-lp">${escapeHtml(repo)}</span>
             ${tag ? `<span class="font-mono-lp" style="font-size:11px;color:var(--text-dim);">${escapeHtml(tag)}</span>` : ""}
@@ -783,15 +798,6 @@ function formatTimestamp(ts) {
         }) + " UTC";
     } catch {
         return ts;
-    }
-}
-
-function formatTimeOnly(ts) {
-    try {
-        const d = new Date(ts);
-        return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
-    } catch {
-        return "";
     }
 }
 
