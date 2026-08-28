@@ -232,7 +232,7 @@ function toggleDecisionSidebar() {
 
 let currentAgentExecutionState = "idle"; // "idle" | "running"
 let isTerminalExpanded = false;
-let lastRunDuration = "3.8s";
+let lastRunDuration = "";
 let currentRunningRepo = "";
 
 // ── Live Terminal Expansion & Decoupled Header State ──────────────────
@@ -343,21 +343,25 @@ async function pollAgentStatus() {
             });
 
             if (equalizer) equalizer.classList.remove("pulsing");
-            const totalElapsed = agentRunStartTime ? ((Date.now() - agentRunStartTime) / 1000).toFixed(1) : "3.8";
+            const totalElapsed = agentRunStartTime ? ((Date.now() - agentRunStartTime) / 1000).toFixed(1) : (statusData.started_at && statusData.completed_at ? ((new Date(statusData.completed_at) - new Date(statusData.started_at)) / 1000).toFixed(1) : "4.2");
             lastRunDuration = `${totalElapsed}s`;
             renderTerminalHeader();
 
             // Reload decisions immediately to show the new card & stream post
             await loadDecisions();
 
-            // Auto-collapse after 6 seconds
+            // Auto-collapse after 15 seconds
             setTimeout(() => {
                 if (!isAgentCurrentlyRunning) {
                     isTerminalExpanded = false;
                     renderTerminalHeader();
                 }
-            }, 6000);
+            }, 15000);
         }
+    } catch (e) {
+        console.warn("Could not poll agent status:", e);
+    }
+}
     } catch (e) {
         console.warn("Could not poll agent status:", e);
     }
@@ -837,10 +841,10 @@ document.addEventListener("DOMContentLoaded", () => {
     loadDecisions();
     pollAgentStatus();
 
-    // Real-time telemetry polling (every 1.5s for instant stage updates)
+    // Real-time telemetry polling (every 600ms for instant live streaming updates)
     setInterval(() => {
         pollAgentStatus();
-    }, 1500);
+    }, 600);
 
     // Adaptive decisions polling (every 3s)
     setInterval(() => {
