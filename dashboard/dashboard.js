@@ -506,13 +506,13 @@ function renderActivePostWorkspace(decision, shouldAnimateTypewriter) {
         badge.className = `decision-badge font-mono-lp badge-${action}`;
     }
 
-    // Reasoning quote
-    if (reasoningEl) {
-        reasoningEl.textContent = `"${formatAgentVoice(decision)}"`;
-    }
+    const actionBtnGroup = document.getElementById("post-action-btn-group");
+    const restraintBadge = document.getElementById("post-restraint-badge");
 
     // Handle SKIP decision state
     if (action === "skip" || !pkg.text) {
+        if (actionBtnGroup) actionBtnGroup.style.display = "none";
+        if (restraintBadge) restraintBadge.style.display = "inline-block";
         if (textEl) {
             textEl.innerHTML = `
                 <div style="padding:16px; background:var(--bg-surface-elevated); border:1px solid var(--border-base); border-radius:6px; color:var(--text-secondary);">
@@ -527,6 +527,9 @@ function renderActivePostWorkspace(decision, shouldAnimateTypewriter) {
         if (footnoteEl) footnoteEl.style.display = "none";
         return;
     }
+
+    if (actionBtnGroup) actionBtnGroup.style.display = "flex";
+    if (restraintBadge) restraintBadge.style.display = "none";
 
     // Body Text with Token Typewriter or Instant Render
     const fullText = pkg.text || "";
