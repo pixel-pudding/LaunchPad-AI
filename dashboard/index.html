@@ -4,15 +4,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LaunchPad AI — Autonomous Developer Launch Agent</title>
+    <title>LaunchPad-AI — Autonomous Portfolio &amp; LinkedIn Sync</title>
     <meta name="description"
-        content="LaunchPad AI is an autonomous developer launch agent that watches GitHub releases, curates career impact, drafts viral LinkedIn launch packages, and updates portfolio codebases with auto-merged PRs.">
+        content="LaunchPad-AI watches your GitHub releases, decides whether a release is worth featuring, keeps your portfolio site current, and drafts the LinkedIn post announcing it.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="/static/dashboard.css?v=40">
+    <link rel="stylesheet" href="/static/dashboard.css?v=41">
 </head>
 
 <body>
@@ -22,14 +22,11 @@
         <div class="header-inner">
             <div class="brand-group">
                 <a href="#overview" class="brand-logo" onclick="switchTab('landing')">
-                    <span class="logo-mark">🚀</span>
-                    <div class="brand-text">
-                        <span class="brand-name">LaunchPad AI</span>
-                        <span class="brand-sub font-mono-lp">v1.0 · Vertex AI</span>
-                    </div>
+                    <span class="logo-mark">L</span>
+                    <span class="brand-text">
+                        <span class="brand-name">LaunchPad<span class="hyphen">-</span>AI</span>
+                    </span>
                 </a>
-                <span class="brand-divider"></span>
-                <span class="brand-tagline">Autonomous Developer Launch Agent for GitHub Releases</span>
             </div>
 
             <!-- Tab Switcher -->
@@ -38,7 +35,7 @@
                     Overview
                 </a>
                 <a href="#dashboard" class="nav-tab" id="tab-btn-dashboard" onclick="switchTab('dashboard')">
-                    Live Dashboard
+                    Dashboard
                     <span class="nav-tab-pill font-mono-lp" id="nav-decisions-count">0</span>
                 </a>
             </nav>
@@ -46,7 +43,7 @@
             <!-- Live Status Indicator -->
             <div class="header-status">
                 <span class="dot-indicator pulse"></span>
-                <span class="font-mono-lp header-status-text">LIVE ON CLOUD RUN</span>
+                <span class="font-mono-lp header-status-text">AGENT ONLINE</span>
             </div>
         </div>
     </header>
@@ -80,134 +77,87 @@
                         <span class="obs-val font-mono-lp">CONNECTED</span>
                     </div>
                 </a>
-                <a href="https://console.cloud.google.com/traces/list?project=launchpad-ai-506616" target="_blank"
-                    rel="noopener" class="obs-item" title="Google Cloud Trace">
-                    <span class="dot-indicator"></span>
-                    <div class="obs-text">
-                        <span class="obs-label font-mono-lp">CLOUD TRACE</span>
-                        <span class="obs-val font-mono-lp">ACTIVE</span>
-                    </div>
-                </a>
-                <a href="https://console.cloud.google.com/logs/query;query=resource.type%3D%22cloud_run_revision%22%20resource.labels.service_name%3D%22launchpad-ai%22?project=launchpad-ai-506616"
-                    target="_blank" rel="noopener" class="obs-item" title="Cloud Run Logs Explorer">
-                    <span class="dot-indicator"></span>
-                    <div class="obs-text">
-                        <span class="obs-label font-mono-lp">LOGS EXPLORER</span>
-                        <span class="obs-val font-mono-lp">STREAMING</span>
-                    </div>
-                </a>
             </div>
 
-            <!-- Auto-Merge Switch & Gemini Monitor in Header Strip -->
-            <div class="obs-meta" style="display:flex; align-items:center; gap:14px;">
-                <label class="toggle-switch-wrap" title="Toggle autonomous GitHub PR merging">
-                    <div class="toggle-switch">
-                        <input type="checkbox" id="header-automerge-toggle" onchange="onAutoMergeToggleChanged(this.checked)" checked />
-                        <span class="toggle-slider"></span>
-                    </div>
-                    <span class="toggle-label font-mono-lp" id="header-automerge-label">AUTO-MERGE: ON</span>
-                </label>
-
-                <div class="model-monitor-group" style="display:flex; align-items:center; gap:8px; border-left:1px solid var(--border-base); padding-left:12px;">
-                    <span class="font-mono-lp obs-sync-text" id="obs-sync-status">Gemini 3.5 Flash</span>
-                    <div class="model-equalizer-bars" id="model-equalizer-bars" aria-hidden="true" title="Gemini 3.5 AI Activity Monitor">
-                        <span class="model-bar"></span>
-                        <span class="model-bar"></span>
-                        <span class="model-bar"></span>
-                        <span class="model-bar"></span>
-                        <span class="model-bar"></span>
-                        <span class="model-bar"></span>
-                        <span class="model-bar"></span>
-                    </div>
-                </div>
+            <div class="obs-meta">
+                <span class="font-mono-lp obs-sync-text">Gemini 3.5 Flash</span>
             </div>
         </div>
     </div>
 
     <!-- ══════════════════════════════════════════════════════ -->
-    <!-- VIEW 1: LANDING / OVERVIEW TAB                         -->
+    <!-- VIEW 1: OVERVIEW TAB                                   -->
     <!-- ══════════════════════════════════════════════════════ -->
     <main class="page-view" id="view-landing">
         <div class="view-content">
 
             <!-- Hero Grid -->
             <section class="hero-section">
-                <div class="hero-ambient-glow"></div>
                 <div class="hero-text-col">
                     <div class="badge-pill font-mono-lp hero-kicker">
-                        RELEASE AUTOMATION AGENT
+                        PORTFOLIO &amp; LINKEDIN SYNC AGENT
                     </div>
                     <h1 class="hero-title">
-                        Ship a release.<br>The rest is handled.
+                        Ship a release.<br><span class="accent">The rest is handled.</span>
                     </h1>
                     <p class="hero-desc">
-                        Ship a release, walk away. LaunchPad AI's autonomous curator evaluates your work against your
-                        developer context, generates LinkedIn announcements with live UI screenshots, and directly updates your portfolio codebase with auto-merged pull requests.
+                        An agent watches your GitHub releases, decides whether each one is worth featuring, keeps
+                        your portfolio site current, and writes the post announcing it. You stay a publisher, not
+                        a maintainer.
+                    </p>
+                    <p class="hero-flowline font-mono-lp">
+                        you publish the release → the agent decides, updates your portfolio, and drafts the post.
                     </p>
                     <div class="hero-actions">
-                        <button class="btn btn-primary" onclick="switchTab('dashboard')">
-                            Open Live Dashboard →
-                        </button>
                         <a href="https://github.com/apps/launchpad-ai-agent" target="_blank" rel="noopener"
-                            class="btn btn-secondary">
-                            Install GitHub App ↗
+                            class="btn btn-primary">
+                            Install the GitHub App →
                         </a>
+                        <button class="btn btn-secondary" onclick="switchTab('dashboard')">
+                            Open Dashboard
+                        </button>
                     </div>
                     <div class="hero-pills font-mono-lp">
-                        <span>✓ Zero manual blogging</span>
-                        <span>✓ Auto-merges portfolio PRs</span>
-                        <span>✓ Genuine multi-way curation</span>
+                        <span><span class="tick">✓</span> Genuine feature / update / skip decision</span>
+                        <span><span class="tick">✓</span> Zero manual blogging</span>
+                        <span><span class="tick">✓</span> You approve every LinkedIn post</span>
                     </div>
                 </div>
 
-                <!-- Interactive Agent Terminal Mockup -->
-                <div class="hero-terminal-col">
-                    <div class="terminal-card">
-                        <div class="terminal-header">
-                            <div class="terminal-dots">
-                                <span></span><span></span><span></span>
-                            </div>
-                            <span class="terminal-title font-mono-lp">launchpad — agent engine</span>
-                            <div class="terminal-status font-mono-lp">
-                                <span class="dot-indicator pulse"></span>
-                                running
-                            </div>
+                <!-- Interactive "Agent in a nutshell" sample-release demo -->
+                <div class="hero-demo-col">
+                    <div class="nutshell-card">
+                        <div class="nutshell-header">
+                            <span class="nutshell-eyebrow font-mono-lp">THE AGENT IN A NUTSHELL</span>
+                            <p class="nutshell-sub">Pick a sample release to see what the agent does with it.</p>
+                            <p class="nutshell-benefit">No forgotten portfolio updates, no blank LinkedIn draft to stare at — the agent reads the release, makes a real feature/update/skip call, and always tells you why in plain language.</p>
+                            <div class="nutshell-chips" id="nutshell-chips"></div>
                         </div>
-                        <div class="terminal-body">
-                            <div class="terminal-step">
-                                <span class="term-sym">›</span>
-                                <span class="term-label">release detected</span>
-                                <span class="term-val font-mono-lp">postmortem-ai v1.0</span>
+                        <div class="nutshell-body">
+                            <div class="nutshell-top-row">
+                                <span class="decision-badge font-mono-lp" id="nutshell-badge"></span>
+                                <span class="nutshell-repo" id="nutshell-repo"></span>
                             </div>
-                            <div class="terminal-step">
-                                <span class="term-sym">›</span>
-                                <span class="term-label">evaluating capability</span>
-                                <span class="term-val font-mono-lp" style="color: var(--accent-sage);">decision: feature_new</span>
+                            <p class="nutshell-reason" id="nutshell-reason"></p>
+
+                            <div class="nutshell-row">
+                                <span class="nutshell-row-num sage">1</span>
+                                <div>
+                                    <div class="nutshell-row-title">Your portfolio site</div>
+                                    <div class="nutshell-row-detail" id="nutshell-portfolio"></div>
+                                </div>
                             </div>
-                            <div class="terminal-step">
-                                <span class="term-sym">›</span>
-                                <span class="term-label">native framework splicing</span>
-                                <span class="term-val font-mono-lp" style="color: var(--accent-sage);">index.html (+1 card)</span>
+                            <div class="nutshell-row">
+                                <span class="nutshell-row-num yellow">2</span>
+                                <div>
+                                    <div class="nutshell-row-title">LinkedIn post</div>
+                                    <div class="nutshell-row-detail" id="nutshell-post"></div>
+                                </div>
                             </div>
-                            <div class="terminal-step">
-                                <span class="term-sym">›</span>
-                                <span class="term-label">pull request opened</span>
-                                <span class="term-val font-mono-lp" style="color: var(--accent-sage);">auto-merged into main ✓</span>
-                            </div>
-                            <div class="terminal-step">
-                                <span class="term-sym">›</span>
-                                <span class="term-label">drafting linkedin package</span>
-                                <span class="term-val font-mono-lp" style="color: var(--accent-amber);">ready with UI preview</span>
-                            </div>
-                            <div class="terminal-divider"></div>
-                            <div class="terminal-footer">
-                                <span class="font-mono-lp term-success">✓ live site updated · post ready</span>
-                                <span class="font-mono-lp term-badge">awaiting review</span>
-                            </div>
-                            <div class="terminal-prompt font-mono-lp">
-                                <span class="term-prompt-sym">$</span>
-                                <span class="terminal-cursor"></span>
-                            </div>
+                            <p class="nutshell-byproduct" id="nutshell-byproduct"></p>
+                        </div>
+                        <div class="nutshell-footer">
+                            your total work: publishing the release
                         </div>
                     </div>
                 </div>
@@ -216,17 +166,17 @@
             <!-- 2-Step Connect Strip -->
             <section class="connect-section">
                 <div class="section-label-bar">
-                    <span class="mono-label font-mono-lp">CONNECT IN TWO STEPS</span>
+                    <span class="mono-label font-mono-lp">YOUR ONLY TWO STEPS</span>
                     <span class="section-rule"></span>
+                    <span class="font-mono-lp" style="font-size:11px; color:var(--text-dim);">~2 min, once · the agent handles the rest</span>
                 </div>
                 <div class="connect-grid">
                     <!-- Step 1 -->
                     <div class="connect-card">
-                        <div class="step-num font-mono-lp">01</div>
+                        <div class="step-num font-mono-lp">1</div>
                         <h3 class="connect-title">Install the GitHub App</h3>
                         <p class="connect-desc">
-                            Install on your personal account or organization. LaunchPad AI only requests permissions to
-                            read repository metadata/releases and open pull requests.
+                            Read access to your releases, write access to your portfolio repo. Nothing else.
                         </p>
                         <div class="connect-action">
                             <a href="https://github.com/apps/launchpad-ai-agent" target="_blank" rel="noopener"
@@ -239,50 +189,53 @@
 
                     <!-- Step 2 -->
                     <div class="connect-card">
-                        <div class="step-num font-mono-lp">02</div>
-                        <h3 class="connect-title">Target Portfolio Repository</h3>
+                        <div class="step-num font-mono-lp">2</div>
+                        <h3 class="connect-title">Pick your portfolio repo</h3>
                         <p class="connect-desc">
-                            Connect your portfolio repository. The agent automatically detects your codebase structure (HTML, React, Next.js, Astro) and directly splices in the new project card.
+                            The agent updates your <code>projects.json</code> and <code>skills.json</code> and opens
+                            a pull request — your site renders them in its own design. If your portfolio doesn't use
+                            that convention, releases open a review pull request instead of merging automatically.
                         </p>
                         <div class="target-repo-box" id="target-repo-box">
                             <div class="repo-input-wrapper" id="repo-input-wrapper">
-                                <input 
-                                    type="text" 
-                                    class="repo-input font-mono-lp" 
-                                    id="portfolio-repo-input" 
+                                <input
+                                    type="text"
+                                    class="repo-input font-mono-lp"
+                                    id="portfolio-repo-input"
                                     placeholder="e.g. username/personal-portfolio or GitHub URL"
                                 />
-                                <button class="btn btn-connect-action font-mono-lp" onclick="connectPortfolioRepo()">
+                                <button class="btn-connect-action font-mono-lp" onclick="connectPortfolioRepo()">
                                     Connect
                                 </button>
                             </div>
                             <div class="repo-connected-state" id="repo-connected-state" style="display:none;">
                                 <span class="font-mono-lp repo-name-display" id="portfolio-target-name"></span>
                                 <div class="repo-action-group">
-                                    <span class="badge-pill font-mono-lp" style="color: var(--accent-sage); background: var(--sage-bg); border-color: var(--sage-border);">CONNECTED</span>
+                                    <span class="badge-pill font-mono-lp" style="color: var(--sage-text); background: var(--sage-bg); border: 1px solid var(--sage-border);">CONNECTED</span>
                                     <button class="btn-edit-target font-mono-lp" onclick="editPortfolioRepo()" title="Change portfolio repository">Edit</button>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Step 2 Auto-Merge Toggle Option -->
-                        <div style="margin-top: 14px; padding: 12px 14px; background: var(--bg-surface-elevated); border: 1px solid var(--border-base); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
+                        <!-- Auto-Merge toggle — the ONE actionable control for this setting -->
+                        <div class="automerge-row">
                             <div>
-                                <strong style="font-size: 12.5px; color: var(--text-primary); display:block;">Autonomous Auto-Merge</strong>
-                                <span style="font-size: 11px; color: var(--text-muted);">Automatically merge verified portfolio PRs into main</span>
+                                <strong class="automerge-row-title">Auto-merge portfolio PRs</strong>
+                                <span class="automerge-row-desc">Merge verified portfolio pull requests automatically, with no manual click.</span>
                             </div>
-                            <label class="toggle-switch-wrap" style="display:flex; align-items:center;">
+                            <label class="toggle-switch-wrap">
                                 <div class="toggle-switch">
                                     <input type="checkbox" id="onboarding-automerge-toggle" onchange="onAutoMergeToggleChanged(this.checked)" checked />
                                     <span class="toggle-slider"></span>
                                 </div>
-                                <span class="toggle-label font-mono-lp" id="onboarding-automerge-label" style="margin-left: 8px;">AUTO-MERGE: ON</span>
+                                <span class="toggle-label font-mono-lp" id="onboarding-automerge-label">AUTO-MERGE: ON</span>
+                                <span class="automerge-save-state font-mono-lp" id="automerge-save-state"></span>
                             </label>
                         </div>
 
                         <div class="connect-note">
-                            <span class="font-mono-lp note-badge">NOTE</span>
-                            <p>We draft your LinkedIn post — you review and publish it with one click. No LinkedIn login or permissions required.</p>
+                            <span class="note-badge">NOTE</span>
+                            <p>We draft your LinkedIn post — you review and publish it. No LinkedIn login or permissions required.</p>
                         </div>
                     </div>
                 </div>
@@ -291,30 +244,42 @@
             <!-- How It Works Flow -->
             <section class="how-section">
                 <div class="section-label-bar">
-                    <span class="mono-label font-mono-lp">HOW IT WORKS</span>
+                    <span class="mono-label font-mono-lp">AFTER THAT, THE AGENT HANDLES IT</span>
                     <span class="section-rule"></span>
+                    <span class="font-mono-lp" style="font-size:11px; color:var(--text-dim);">gemini 3.5 flash on vertex ai</span>
                 </div>
                 <div class="steps-flow-grid">
                     <div class="flow-step-card">
-                        <div class="flow-num font-mono-lp">01</div>
+                        <div class="flow-step-top">
+                            <span class="flow-num font-mono-lp">STEP 01</span>
+                            <span class="flow-role-tag font-mono-lp">you</span>
+                        </div>
                         <h4>Release published</h4>
-                        <p>A webhook fires the moment you publish a tagged release in any connected repository.</p>
+                        <p>You tag a release on a connected repo. A webhook wakes the agent.</p>
                     </div>
                     <div class="flow-step-card">
-                        <div class="flow-num font-mono-lp">02</div>
-                        <h4>Agent evaluates</h4>
-                        <p>Gemini 3.5 analyzes release notes and decides: <code>feature_new</code>,
-                            <code>update_existing</code>, or <code>skip</code>.</p>
+                        <div class="flow-step-top">
+                            <span class="flow-num font-mono-lp">STEP 02</span>
+                            <span class="flow-role-tag font-mono-lp">gemini</span>
+                        </div>
+                        <h4>Agent decides</h4>
+                        <p>Gemini reads the release against what's already featured and picks <code>feature</code>, <code>update</code>, or <code>skip</code> — with written reasoning.</p>
                     </div>
                     <div class="flow-step-card">
-                        <div class="flow-num font-mono-lp">03</div>
-                        <h4>Native Code Splicing</h4>
-                        <p>Detects your site's framework (HTML, React, Next.js, Astro), directly splices the new project card, and auto-merges the PR.</p>
+                        <div class="flow-step-top">
+                            <span class="flow-num font-mono-lp">STEP 03</span>
+                            <span class="flow-role-tag font-mono-lp">agent</span>
+                        </div>
+                        <h4>Portfolio updated</h4>
+                        <p>Rewrites your two data files, opens the PR, merges on green. Site is live in minutes.</p>
                     </div>
                     <div class="flow-step-card accent-card">
-                        <div class="flow-num font-mono-lp">04</div>
-                        <h4>Post drafted for you</h4>
-                        <p>A structured LinkedIn draft lands on your dashboard with live UI screenshots. One click copies the post and opens LinkedIn.</p>
+                        <div class="flow-step-top">
+                            <span class="flow-num font-mono-lp">STEP 04</span>
+                            <span class="flow-role-tag font-mono-lp">you</span>
+                        </div>
+                        <h4>Post ready to publish</h4>
+                        <p>A drafted LinkedIn post lands on your dashboard. Copy it and publish — the only other thing you touch.</p>
                     </div>
                 </div>
 
@@ -324,10 +289,8 @@
                     <span class="control-divider"></span>
                     <span class="control-text">Nothing is published on LinkedIn without your approval.</span>
                     <span class="control-divider"></span>
-                    <span class="font-mono-lp control-item" style="color: var(--accent-sage);">✓ Portfolio PRs
-                        auto-merge</span>
-                    <span class="font-mono-lp control-item" style="color: var(--accent-amber);">⟳ Posts need your
-                        review</span>
+                    <span class="font-mono-lp control-item" style="color: var(--accent-sage);">✓ Portfolio PRs auto-merge when verified</span>
+                    <span class="font-mono-lp control-item" style="color: var(--yellow-text-alt);">Posts always need your review</span>
                 </div>
             </section>
 
@@ -340,165 +303,116 @@
     <main class="page-view" id="view-dashboard" style="display:none;">
         <div class="view-content">
 
-            <!-- ── Top Live Agent Activity Execution Panel ─────────── -->
+            <!-- ── Live Agent Status Banner ─────────────────────── -->
             <div id="live-terminal-container" class="live-terminal-container">
-                <!-- Main Header (Always visible: displays true RUNNING or STANDBY status) -->
                 <div class="terminal-main-header" onclick="toggleTerminalExpansion()">
-                    <div class="terminal-title-group" style="display:flex; align-items:center; gap:8px;">
-                        <span class="dot-indicator" id="terminal-status-dot" style="background:#22C55E;"></span>
-                        <span id="terminal-status-title" style="color:#F8FAFC; font-weight:600;">AGENT STANDBY</span>
-                        <span id="terminal-status-desc" style="color:#94A3B8;">· Watching connected GitHub repositories for tagged releases</span>
+                    <div class="terminal-title-group">
+                        <span class="dot-indicator" id="terminal-status-dot"></span>
+                        <span id="terminal-status-title">AGENT IDLE</span>
+                        <span id="terminal-status-desc">· Watching connected repositories for tagged releases</span>
                     </div>
                     <div style="display:flex; align-items:center; gap:12px;">
-                        <span id="terminal-timer-badge" class="font-mono-lp" style="color: #4ADE80; display:none;">0.0s elapsed</span>
+                        <span id="terminal-timer-badge" class="font-mono-lp" style="color: var(--sage-text); display:none;">0.0s elapsed</span>
                         <button class="font-mono-lp btn-terminal-toggle" id="btn-terminal-toggle" onclick="event.stopPropagation(); toggleTerminalExpansion();">
-                            View execution logs ▾
+                            View stages ▾
                         </button>
                     </div>
                 </div>
 
-                <!-- Collapsible Stages Grid (Toggled independently from execution status) -->
                 <div class="terminal-stages-collapsible" id="terminal-stages-collapsible" style="display:none;">
                     <div class="terminal-stages-grid" id="terminal-stages-grid">
                         <div class="terminal-stage-item" id="stage-1">
-                            <span class="stage-num font-mono-lp">01 / INGEST</span>
-                            <span class="stage-label" id="stage-1-label">Webhook Received</span>
+                            <span class="stage-num font-mono-lp">01 · INGEST</span>
+                            <span class="stage-label" id="stage-1-label">Webhook received</span>
                         </div>
                         <div class="terminal-stage-item" id="stage-2">
-                            <span class="stage-num font-mono-lp">02 / ANALYST</span>
-                            <span class="stage-label" id="stage-2-label">Profiling Repo</span>
+                            <span class="stage-num font-mono-lp">02 · ANALYST</span>
+                            <span class="stage-label" id="stage-2-label">Profiling repo</span>
                         </div>
                         <div class="terminal-stage-item" id="stage-3">
-                            <span class="stage-num font-mono-lp">03 / CURATOR</span>
-                            <span class="stage-label" id="stage-3-label">Gemini 3.5 Deciding</span>
+                            <span class="stage-num font-mono-lp">03 · CURATOR</span>
+                            <span class="stage-label" id="stage-3-label">Gemini 3.5 deciding</span>
                         </div>
                         <div class="terminal-stage-item" id="stage-4">
-                            <span class="stage-num font-mono-lp">04 / COPYWRITER</span>
-                            <span class="stage-label" id="stage-4-label">Staging Post & Image</span>
+                            <span class="stage-num font-mono-lp">04 · WRITER</span>
+                            <span class="stage-label" id="stage-4-label">Staging post &amp; image</span>
                         </div>
                         <div class="terminal-stage-item" id="stage-5">
-                            <span class="stage-num font-mono-lp">05 / SPLICER</span>
-                            <span class="stage-label" id="stage-5-label">Splicing Codebase</span>
+                            <span class="stage-num font-mono-lp">05 · PUBLISHER</span>
+                            <span class="stage-label" id="stage-5-label">Updating portfolio</span>
                         </div>
                         <div class="terminal-stage-item" id="stage-6">
-                            <span class="stage-num font-mono-lp">06 / MERGE</span>
-                            <span class="stage-label" id="stage-6-label">Auto-Merging PR</span>
+                            <span class="stage-num font-mono-lp">06 · MERGE</span>
+                            <span class="stage-label" id="stage-6-label">Auto-merging PR</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Dashboard Sub-Header -->
-            <div class="dash-header" style="margin-bottom: 16px;">
-                <div>
-                    <h2 class="dash-title">Agent Activity Feed</h2>
-                    <p class="dash-subtitle">
-                        Every release evaluated by Gemini 3.5 Flash, with first-person reasoning and auto-merged pull requests.
-                    </p>
-                </div>
-                <div class="dash-badges font-mono-lp">
-                    <span class="dash-stat-badge" id="dash-automerge-status-pill" style="color:var(--accent-sage); background:var(--sage-bg); border-color:var(--sage-border);">
-                        Auto-Merge Active
-                    </span>
-                    <span class="dash-stat-badge" id="dash-last-event">
-                        <span class="dot-indicator pulse"></span>
-                        <span id="dash-last-event-text">Live Sync</span>
-                    </span>
-                </div>
+            <!-- ── "Latest release" header ──────────────────────── -->
+            <div class="dash-latest-header">
+                <h2 class="dash-title" id="dash-latest-title">No releases yet</h2>
+                <span class="dash-handled-pill font-mono-lp" id="dash-handled-pill" style="display:none;"></span>
+                <span class="dash-automerge-pill font-mono-lp" id="dash-automerge-status-pill">
+                    <span class="dot-indicator"></span>
+                    <span id="dash-automerge-status-text">Auto-merge active</span>
+                </span>
             </div>
 
-            <!-- ── Cockpit 62/38 Main Layout ──────────────────────── -->
-            <div class="dash-cockpit-grid" id="dash-cockpit-grid">
+            <!-- ── Empty state (no decisions at all yet) ────────── -->
+            <div class="dash-empty-state" id="dash-empty-state">
+                <h3>No releases processed yet</h3>
+                <p>Publish a tagged release on a connected repo to see the agent work. <a href="#overview" onclick="switchTab('landing')">Connect a repo →</a></p>
+            </div>
 
-                <!-- Left Column (38%): Decision Feed Sidebar -->
-                <section class="decisions-stream-col">
-                    <div class="decisions-container">
-                        <div class="decisions-header-bar font-mono-lp">
-                            <span>RELEASES & REASONING</span>
-                            <button class="sidebar-collapse-btn font-mono-lp" id="btn-toggle-sidebar" onclick="toggleDecisionSidebar()" title="Collapse / Expand Feed">
-                                ◀
-                            </button>
-                        </div>
+            <!-- ── Twin cards: Portfolio Updated / Publish Ready ── -->
+            <div class="dash-twin-cards" id="dash-twin-cards" style="display:none;">
 
-                        <!-- Empty State Placeholder -->
-                        <div class="decision-log-empty" id="decision-log-empty">
-                            <div class="empty-icon font-mono-lp">⚡</div>
-                            <h3>No releases processed yet</h3>
-                            <p>Publish a release on any connected GitHub repository to trigger the autonomous agent.</p>
-                        </div>
-
-                        <!-- Dynamic Decision List Container -->
-                        <div class="decisions-list" id="decision-log"></div>
+                <section class="twin-card portfolio-card" id="portfolio-card">
+                    <div class="twin-card-header">
+                        <span class="twin-card-status-pill" id="portfolio-status-pill">
+                            <span class="twin-card-status-dot"></span>
+                            <span id="portfolio-status-text">PORTFOLIO UPDATED</span>
+                        </span>
+                        <span class="twin-card-title" id="portfolio-title">Merged into your site</span>
+                    </div>
+                    <div class="twin-card-body">
+                        <p class="agent-narrative-box" id="portfolio-diff-box" style="display:none;"></p>
+                        <p class="twin-card-empty" id="portfolio-empty" style="display:none;">No portfolio changes for this release.</p>
+                        <div class="twin-card-actions" id="portfolio-actions"></div>
                     </div>
                 </section>
 
-                <!-- Right Column (62%): Hero Action & Post Review Workspace -->
-                <aside class="dash-sidebar-col">
+                <section class="twin-card publish-card" id="publish-card">
+                    <div class="twin-card-header">
+                        <span class="twin-card-status-pill" id="publish-status-pill">
+                            <span class="twin-card-status-dot"></span>
+                            <span id="publish-status-text">PUBLISH READY</span>
+                        </span>
+                        <span class="twin-card-title" id="publish-title">Your LinkedIn post is drafted</span>
+                    </div>
+                    <div class="twin-card-body" id="publish-body">
+                        <!-- Populated by dashboard.js: reasoning quote, post text, image slot, hashtags, actions -->
+                    </div>
+                </section>
 
-                    <!-- Post Review Card -->
-                    <div class="sidebar-card post-review-card" id="post-review-card" style="padding:0; overflow:hidden;">
-                        
-                        <!-- Top-Pinned Action Header (2-Tier Clean Layout) -->
-                        <div class="post-action-pinned-header">
-                            <!-- Tier 1: Title & Badges Row (100% width, never wraps) -->
-                            <div class="post-header-top-row">
-                                <div class="card-title-group" style="display:flex; align-items:center; gap:8px; flex-wrap:nowrap; overflow:hidden;">
-                                    <span class="font-mono-lp card-kicker" style="font-size:11px; font-weight:700; color:var(--text-secondary); white-space:nowrap;">LAUNCH PACKAGE</span>
-                                    <span class="decision-badge font-mono-lp" id="post-action-badge" style="display:none; white-space:nowrap;">READY</span>
-                                    <span class="font-mono-lp post-repo-name" id="post-repo" style="font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></span>
-                                </div>
-                                <span id="post-restraint-badge" class="badge-pill font-mono-lp" style="display:none; background:#F1F5F9; color:#475569; border-color:#CBD5E1; font-weight:600; white-space:nowrap;">🛡️ EDITORIAL RESTRAINT</span>
-                            </div>
+            </div>
 
-                            <!-- Tier 2: Dedicated Horizontal Action Toolbar -->
-                            <div class="post-action-btn-group" id="post-action-btn-group">
-                                <button class="btn-copy-post font-mono-lp" id="btn-copy" onclick="copyPostContent()">
-                                    📋 Copy post & Open LinkedIn
-                                </button>
-                                <button class="btn-copy-image font-mono-lp" id="btn-copy-img" onclick="copyPostImage()" title="Copy live screenshot to clipboard">
-                                    🖼️ Copy Image
-                                </button>
-                                <button class="sidebar-collapse-btn font-mono-lp" onclick="editPostContent()" id="btn-edit-post" style="padding: 10px 14px;">
-                                    ✏️ Edit
-                                </button>
-                            </div>
-                        </div>
+            <!-- ── Agent activity feed + byproduct aside ────────── -->
+            <div class="dash-activity-grid" id="dash-activity-grid" style="display:none;">
 
-                        <!-- Empty state when no posts -->
-                        <div class="post-card-empty" id="post-card-empty" style="padding: 24px 20px;">
-                            <p>Awaiting first release. Push a meaningful release to trigger an autonomous LinkedIn package and portfolio update!</p>
-                        </div>
-
-                        <!-- Active Post Content Workspace -->
-                        <div class="post-card-content" id="post-card-content" style="display:none; padding: 20px;">
-                            
-                            <!-- First-Person Reasoning Quote -->
-                            <div class="post-reasoning-quote font-mono-lp" id="post-reasoning" style="margin-bottom:14px;"></div>
-
-                            <!-- Post Body Text (With Token-by-Token Typewriter Stream) -->
-                            <div class="post-body-box" style="margin-bottom:16px;">
-                                <div class="post-text-content" id="post-text" style="font-size:14px; line-height:1.75; white-space:pre-wrap;"></div>
-                            </div>
-
-                            <!-- Generated Project UI Preview Screenshot (Widescreen 1200px) -->
-                            <div class="post-image-box" id="post-image-container" style="display:none; margin-bottom:16px;">
-                                <div class="image-overlay-badge font-mono-lp">UI PREVIEW · LIVE SNAPSHOT</div>
-                                <img id="post-image" alt="Project Preview Banner" style="width:100%; border-radius:6px; border:1px solid var(--border-base);" />
-                            </div>
-
-                            <!-- Hashtag Chips -->
-                            <div class="post-hashtags-wrap" id="post-hashtags" style="margin-bottom:14px;"></div>
-
-                            <!-- Direct PR & Live Deployment Links -->
-                            <div class="post-links-wrap" id="post-links" style="margin-bottom:14px;"></div>
-
-                            <!-- Quiet 1-Line Next Build Footnote (Aditi Demotion) -->
-                            <div class="quiet-footnote" id="quiet-next-build-footnote" style="display:none;"></div>
-                        </div>
+                <section class="activity-feed-col">
+                    <div class="activity-feed-heading">
+                        <h2>Agent activity</h2>
+                        <span class="activity-feed-hint font-mono-lp">tap a row for reasoning</span>
                     </div>
 
-                </aside>
+                    <div class="decisions-list" id="decision-log"></div>
+                </section>
 
+                <aside class="dash-aside-col">
+                    <p class="quiet-footnote font-mono-lp" id="quiet-next-build-footnote" style="display:none;"></p>
+                </aside>
             </div>
 
         </div>
@@ -510,13 +424,13 @@
     <!-- ── Footer ──────────────────────────────────────────── -->
     <footer class="site-footer">
         <div class="footer-inner font-mono-lp">
-            <span>LaunchPad AI · All Things Agentic Hackathon</span>
+            <span>LaunchPad-AI · All Things Agentic Hackathon</span>
             <span class="footer-dot">·</span>
             <span>Google ADK + Gemini 3.5 Flash + Vertex AI + Cloud Run + Firestore</span>
         </div>
     </footer>
 
-    <script src="/static/dashboard.js?v=40"></script>
+    <script src="/static/dashboard.js?v=41"></script>
 </body>
 
 </html>
