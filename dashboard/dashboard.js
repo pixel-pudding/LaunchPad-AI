@@ -383,10 +383,11 @@ function renderDecisions(decisions) {
     container.innerHTML = "";
 
     decisions.forEach(d => {
-        const isSelected = selectedDeliveryId === d.delivery_id;
+        const docKey = d.delivery_id || d.id || (d.repo + "_" + (d.tag || "") + "_" + (d.ts || ""));
+        const isSelected = selectedDeliveryId === docKey || (!selectedDeliveryId && decisions[0] === d);
         const item = document.createElement("div");
         item.className = `decision-row-item decision-card-item ${isSelected ? "selected" : ""}`;
-        item.onclick = () => selectDecision(d.delivery_id);
+        item.onclick = () => selectDecision(docKey);
 
         const action = d.action || "skip";
         const badgeClass = `badge-${action}`;
@@ -403,7 +404,7 @@ function renderDecisions(decisions) {
             const prUrl = artifacts.portfolio_pr || "#";
             bannerHtml = `
                 <div class="hero-moment-banner auto-merged font-mono-lp">
-                    <span>✨ Live Portfolio Updated Automatically</span>
+                    <span>✨ Live Portfolio Updated</span>
                     <div style="display:flex; align-items:center; gap:6px;">
                         <a href="${escapeHtml(prUrl)}" target="_blank" rel="noopener" style="color:var(--accent-sage); font-weight:700; text-decoration:underline;">PR Merged ✓</a>
                     </div>
@@ -418,7 +419,7 @@ function renderDecisions(decisions) {
         } else if (artifacts.portfolio_pr) {
             bannerHtml = `
                 <div class="hero-moment-banner skipped font-mono-lp" style="background:#FFFBEB; border-color:#FDE68A; color:#92400E;">
-                    <span>📄 Review PR Opened: <a href="${escapeHtml(artifacts.portfolio_pr)}" target="_blank" rel="noopener" style="color:#92400E; font-weight:700; text-decoration:underline;">Review & Merge ↗</a></span>
+                    <span>📄 Review PR: <a href="${escapeHtml(artifacts.portfolio_pr)}" target="_blank" rel="noopener" style="color:#92400E; font-weight:700; text-decoration:underline;">Open PR ↗</a></span>
                 </div>
             `;
         }
@@ -428,9 +429,10 @@ function renderDecisions(decisions) {
         if (action === "skip") {
             prPill = `<span class="badge-pill font-mono-lp" style="background:#F1F5F9; color:#475569; border-color:#CBD5E1;">🛡️ PRESERVED</span>`;
         } else if (isAutoMerged) {
-            prPill = `<span class="badge-pill font-mono-lp" style="background:var(--sage-bg); color:var(--accent-sage); border-color:var(--sage-border);">🖼️ PR AUTO-MERGED</span>`;
+            const prUrl = artifacts.portfolio_pr || "#";
+            prPill = `<a href="${escapeHtml(prUrl)}" target="_blank" rel="noopener" class="badge-pill font-mono-lp" style="background:var(--sage-bg); color:var(--accent-sage); border-color:var(--sage-border);" onclick="event.stopPropagation();">🖼️ PR AUTO-MERGED</a>`;
         } else if (artifacts.portfolio_pr) {
-            prPill = `<a href="${escapeHtml(artifacts.portfolio_pr)}" target="_blank" rel="noopener" class="badge-pill font-mono-lp" style="background:var(--amber-bg); color:var(--accent-amber); border-color:var(--amber-border);">🖼️ OPEN PR # ↗</a>`;
+            prPill = `<a href="${escapeHtml(artifacts.portfolio_pr)}" target="_blank" rel="noopener" class="badge-pill font-mono-lp" style="background:var(--amber-bg); color:var(--accent-amber); border-color:var(--amber-border);" onclick="event.stopPropagation();">🖼️ OPEN PR # ↗</a>`;
         }
 
         item.innerHTML = `
@@ -460,7 +462,7 @@ function renderDecisions(decisions) {
 function selectDecision(deliveryId) {
     selectedDeliveryId = deliveryId;
     renderDecisions(allDecisions);
-    const target = allDecisions.find(d => d.delivery_id === deliveryId);
+    const target = allDecisions.find(d => (d.delivery_id || d.id || (d.repo + "_" + (d.tag || "") + "_" + (d.ts || ""))) === deliveryId);
     if (target) {
         renderActivePostWorkspace(target, false);
     }
@@ -513,11 +515,12 @@ function renderActivePostWorkspace(decision, shouldAnimateTypewriter) {
     if (action === "skip" || !pkg.text) {
         if (actionBtnGroup) actionBtnGroup.style.display = "none";
         if (restraintBadge) restraintBadge.style.display = "inline-block";
+        if (reasoningEl) reasoningEl.style.display = "none"; // Hide empty green border
         if (textEl) {
             textEl.innerHTML = `
-                <div style="padding:16px; background:var(--bg-surface-elevated); border:1px solid var(--border-base); border-radius:6px; color:var(--text-secondary);">
-                    <strong style="color:var(--text-primary); display:block; margin-bottom:6px;">🛡️ Autonomous Editorial Restraint</strong>
-                    This release was assessed as maintenance-only. To protect your professional audience from noise and keep your portfolio high-signal, no LinkedIn post was published and no unwanted code commits were made.
+                <div style="padding:20px; background:var(--bg-surface-elevated); border:1px solid var(--border-base); border-radius:6px; color:var(--text-secondary);">
+                    <strong style="color:var(--text-primary); display:block; margin-bottom:8px; font-size:14px;">🛡️ Autonomous Editorial Restraint</strong>
+                    This release was assessed as maintenance/dependency updates only. To protect your professional audience from noise and keep your portfolio high-signal, no LinkedIn launch post was drafted and no code changes were committed to your live site.
                 </div>
             `;
         }
@@ -528,8 +531,13 @@ function renderActivePostWorkspace(decision, shouldAnimateTypewriter) {
         return;
     }
 
+    // Active Feature/Update state
     if (actionBtnGroup) actionBtnGroup.style.display = "flex";
     if (restraintBadge) restraintBadge.style.display = "none";
+    if (reasoningEl) {
+        reasoningEl.style.display = "block";
+        reasoningEl.textContent = `"${formatAgentVoice(decision)}"`;
+    }
 
     // Body Text with Token Typewriter or Instant Render
     const fullText = pkg.text || "";
