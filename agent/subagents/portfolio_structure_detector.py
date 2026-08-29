@@ -287,15 +287,29 @@ def _normalize_indentation(snippet: str, target_indent: str) -> str:
 
 
 def _detect_line_indent(content: str, anchor_pos: int) -> str:
-    """Finds the leading whitespace of the line containing or preceding anchor_pos."""
+    """Dynamically finds the leading whitespace of the preceding sibling element/card."""
     import re
+    # Search backwards from anchor_pos for the nearest preceding element or card opening
+    preceding_chunk = content[max(0, anchor_pos - 1500):anchor_pos]
+    
+    # 1. Look for sibling project card / component opening tag
+    card_matches = list(re.finditer(r"^([ \t]+)<(?:div|article|li|section|ProjectCard|Card|Item)\b", preceding_chunk, re.MULTILINE | re.IGNORECASE))
+    if card_matches:
+        return card_matches[-1].group(1)
+    
+    # 2. General opening tag pattern
+    tag_matches = list(re.finditer(r"^([ \t]+)<[a-zA-Z0-9_\-]+", preceding_chunk, re.MULTILINE))
+    if tag_matches:
+        return tag_matches[-1].group(1)
+
+    # 3. Line-based fallback
     line_start = content.rfind("\n", 0, anchor_pos)
     if line_start == -1:
         line_start = 0
     else:
         line_start += 1
-    match = re.match(r"^(\s*)", content[line_start:])
-    return match.group(1) if match else "        "
+    match = re.match(r"^([ \t]*)", content[line_start:])
+    return match.group(1) if match and match.group(1) else "    "
 
 
 def _splice_snippet(
