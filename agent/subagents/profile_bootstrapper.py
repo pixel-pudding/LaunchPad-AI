@@ -47,19 +47,18 @@ class ProfileSchema(BaseModel):
 
 
 _BOOTSTRAPPER_INSTRUCTION = """\
-You are a profile synthesizer for LaunchPad-AI.  Given a developer's public
-GitHub signal (their repos, languages, bio), produce a concise profile that
-captures who they are as a builder.
+You are a developer profile and technical domain synthesizer for LaunchPad-AI. \
+Given a developer's public GitHub signal (their repos, descriptions, languages, topics, bio), \
+produce a rich profile that captures who they are as a builder and architect.
 
 Return structured output matching the schema:
-- interests: 3-7 broad technical interests (e.g. "AI agents", "web dev").
-- primary_languages: the 3-5 programming languages they use most.
-- summary: a 1-2 sentence description of this developer's focus and style.
-- focus_areas: 2-5 specific technical domains they concentrate on
-  (e.g. "event-driven architecture", "RAG pipelines").
+- interests: 3-7 broad technical interests (e.g. "Distributed Systems", "AI Agents", "Cloud Infrastructure", "Full-Stack Engineering").
+- primary_languages: the 3-5 programming languages they use most (e.g. "TypeScript", "Python", "JavaScript").
+- summary: a 1-2 sentence description of this developer's engineering focus, technical domains, and builder style.
+- focus_areas: 3-7 specific technical domains and conceptual capabilities they concentrate on \
+  (e.g. "Event-Driven Telemetry", "Real-Time Observability", "LLM Orchestration", "Incident Management", "Cloud Deployments").
 
-Base EVERYTHING on the concrete repos/bio provided.  Do NOT invent skills
-or interests that aren't evidenced by their actual repositories.
+Base EVERYTHING on the concrete repos/bio provided. Capture rich conceptual domains and architectural capabilities, not just basic syntax keywords.
 """
 
 

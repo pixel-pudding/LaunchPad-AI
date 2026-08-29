@@ -28,30 +28,21 @@ from pydantic import BaseModel, Field
 from agent import config
 
 _SUGGESTER_INSTRUCTION = """\
-You are the Next-Build Suggester for LaunchPad-AI. This is a SECONDARY, \
-optional footnote to the main decision — not career advice, not a \
-skill-gap analysis, not tied to any job market or target role. You simply \
-"finish the thought": given what the developer has already built, what \
-would a natural next build be that extends or complements their existing \
-work?
+You are the Next-Build Suggester for LaunchPad-AI. Given a developer's context \
+(their bootstrapped developer profile, past repositories, featured projects, and the current release), \
+synthesize 1 to 3 concrete next-build ideas that extend, complement, or create synergy with their work.
 
 You will receive:
-- featured_projects: the dev's currently-featured projects (name, summary, \
-stack, skill_tags).
-- context_profile: their stated interests and past projects — context only.
+- current_project: the project currently being released (name, summary, skills).
+- featured_projects: their portfolio-featured projects (name, summary, stack).
+- context_profile: their bootstrapped profile (bio, top repos, focus areas, conceptual domains).
 
 Suggest 1 to 3 concrete next-build ideas. Each must have:
-- "title": a short, concrete project idea (an actual thing to build, not \
-a skill to learn).
-- "one_line_reason": ONE short sentence explicitly tying it to something \
-they've ALREADY built or stated as an interest (e.g. "extends your \
-local-rag-cli work with a hosted API", "complements your Discord bot with \
-a web dashboard"). Never generic ("this would look good", "employers want \
-this").
+- "title": a short, concrete project idea (an actual engineering tool, CLI, service, or app to build).
+- "one_line_reason": ONE concise sentence explicitly tying it to something they have built, \
+their technical focus areas, or the current release (e.g. "Builds a terminal CLI tool that captures local system crashes and streams them into your PostMortem API", "Complements your subscription tracker with automated billing webhook alerts").
 
-If there isn't enough real context here to ground a genuine suggestion, \
-return an EMPTY suggestions list rather than inventing generic ideas. An \
-honest empty result is always better than manufactured filler.
+Ground suggestions in concrete technical domains (e.g. Distributed Tracing, Incident Management, Real-Time Telemetry, API Middleware). Never use generic boilerplate ("this would look good", "employers like this").
 
 Return ONLY structured output matching the schema.
 """
@@ -66,12 +57,17 @@ class NextBuildSuggestions(BaseModel):
     suggestions: list[NextBuildSuggestion] = Field(min_length=0, max_length=3)
 
 
-def _build_prompt(featured_projects: list[dict[str, Any]], context_profile: dict[str, Any]) -> str:
+def _build_prompt(
+    featured_projects: list[dict[str, Any]],
+    context_profile: dict[str, Any],
+    current_project: dict[str, Any] | None = None,
+) -> str:
     payload = {
-        "featured_projects": featured_projects,
-        "context_profile": context_profile,
+        "current_project": current_project or {},
+        "featured_projects": featured_projects or [],
+        "context_profile": context_profile or {},
     }
-    return "Suggest natural next builds, grounded only in this memory.\n\n" + json.dumps(
+    return "Suggest natural next builds, grounded in this developer context.\n\n" + json.dumps(
         payload, indent=2, default=str
     )
 
@@ -100,8 +96,10 @@ def _call_gemini(prompt: str) -> NextBuildSuggestions:
 def suggest_next_builds(
     featured_projects: list[dict[str, Any]],
     context_profile: dict[str, Any],
+    current_project: dict[str, Any] | None = None,
+    **kwargs: Any,
 ) -> list[dict[str, Any]]:
     """Returns 0-3 {title, one_line_reason} dicts. May raise — see module docstring."""
-    prompt = _build_prompt(featured_projects, context_profile)
+    prompt = _build_prompt(featured_projects, context_profile, current_project)
     result = _call_gemini(prompt)
     return [s.model_dump() for s in result.suggestions[:3]]
