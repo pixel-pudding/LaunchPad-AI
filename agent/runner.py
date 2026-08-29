@@ -240,23 +240,41 @@ def run_agent(event: dict) -> dict:
         pr_repo = None
         pr_mode = None
         pr_auto_merge_suppressed = False
-        try:
-            pr = publish_to_portfolio(
-                repo, profile, decision, artifacts.get("post_package", {}), delivery_id, event.get("tag", "")
-            )
-            if pr is not None:
-                artifacts["portfolio_pr"] = pr["url"]
-                artifacts["portfolio_mode"] = pr["mode"]
-                pr_number = pr["number"]
-                pr_repo = pr["portfolio_repo"]
-                pr_mode = pr["mode"]
-                pr_auto_merge_suppressed = pr.get("auto_merge_suppressed", False)
-        except Exception:
-            logger.error(
-                "portfolio_publisher failed for delivery=%s — post package (if any) is unaffected",
-                delivery_id,
-                exc_info=True,
-            )
+
+        if decision.get("action") == "feature_new":
+            try:
+                time.sleep(_STAGE_PACING_SECONDS)
+                memory.set_agent_status({
+                    "status": "running",
+                    "stage": 5,
+                    "stage_name": "Splicing Codebase",
+                    "repo": repo,
+                    "tag": event.get("tag", ""),
+                    "delivery_id": delivery_id,
+                    "started_at": started_at_iso,
+                })
+            except Exception:
+                pass
+
+            try:
+                pr = publish_to_portfolio(
+                    repo, profile, decision, artifacts.get("post_package", {}), delivery_id, event.get("tag", "")
+                )
+                if pr is not None:
+                    artifacts["portfolio_pr"] = pr["url"]
+                    artifacts["portfolio_mode"] = pr["mode"]
+                    pr_number = pr["number"]
+                    pr_repo = pr["portfolio_repo"]
+                    pr_mode = pr["mode"]
+                    pr_auto_merge_suppressed = pr.get("auto_merge_suppressed", False)
+            except Exception:
+                logger.error(
+                    "portfolio_publisher failed for delivery=%s — post package (if any) is unaffected",
+                    delivery_id,
+                    exc_info=True,
+                )
+        else:
+            logger.info("Skipping portfolio publish for action=%s (portfolio left untouched)", decision.get("action"))
 
         if pr_number is not None:
             artifacts["portfolio_pr_merged"] = False
