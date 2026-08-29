@@ -262,6 +262,42 @@ def _call_gemini_for_edit(prompt: str) -> FormatMatchedEdit:
     return parsed
 
 
+def _normalize_indentation(snippet: str, target_indent: str) -> str:
+    """Normalizes the multi-line indentation of a code snippet to match target_indent."""
+    lines = snippet.strip().splitlines()
+    if not lines:
+        return ""
+    # Find minimum indentation among non-empty lines
+    min_indent = 999
+    for line in lines:
+        if line.strip():
+            indent = len(line) - len(line.lstrip())
+            min_indent = min(min_indent, indent)
+    if min_indent == 999:
+        min_indent = 0
+
+    formatted_lines = []
+    for line in lines:
+        if line.strip():
+            stripped = line[min_indent:]
+            formatted_lines.append(target_indent + stripped)
+        else:
+            formatted_lines.append("")
+    return "\n".join(formatted_lines)
+
+
+def _detect_line_indent(content: str, anchor_pos: int) -> str:
+    """Finds the leading whitespace of the line containing or preceding anchor_pos."""
+    import re
+    line_start = content.rfind("\n", 0, anchor_pos)
+    if line_start == -1:
+        line_start = 0
+    else:
+        line_start += 1
+    match = re.match(r"^(\s*)", content[line_start:])
+    return match.group(1) if match else "        "
+
+
 def _splice_snippet(
     current_content: str, snippet: str, anchor: str = "", format_type: str = ""
 ) -> str:
@@ -275,27 +311,38 @@ def _splice_snippet(
     # 1. Exact anchor match
     if anchor and anchor.strip() in current_content:
         anchor_clean = anchor.strip()
-        idx = current_content.find(anchor_clean) + len(anchor_clean)
-        return current_content[:idx] + "\n\n" + snippet + current_content[idx:]
+        anchor_idx = current_content.find(anchor_clean)
+        idx = anchor_idx + len(anchor_clean)
+        target_indent = _detect_line_indent(current_content, anchor_idx)
+        formatted_snippet = _normalize_indentation(snippet, target_indent)
+        return current_content[:idx] + "\n\n" + formatted_snippet + current_content[idx:]
 
     # 2. JSON/TS array fallback: find last '];' or ']'
     if "];" in current_content:
         idx = current_content.rfind("];")
-        return current_content[:idx].rstrip().rstrip(",") + ",\n  " + snippet + "\n];" + current_content[idx + 2 :]
+        target_indent = _detect_line_indent(current_content, idx)
+        formatted_snippet = _normalize_indentation(snippet, target_indent + "  ")
+        return current_content[:idx].rstrip().rstrip(",") + ",\n" + formatted_snippet + "\n];" + current_content[idx + 2 :]
 
     if "]" in current_content:
         idx = current_content.rfind("]")
-        return current_content[:idx].rstrip().rstrip(",") + ",\n  " + snippet + "\n]" + current_content[idx + 1 :]
+        target_indent = _detect_line_indent(current_content, idx)
+        formatted_snippet = _normalize_indentation(snippet, target_indent + "  ")
+        return current_content[:idx].rstrip().rstrip(",") + ",\n" + formatted_snippet + "\n]" + current_content[idx + 1 :]
 
     # 3. HTML / JSX fallback: find closing tag of previous project card
     markers = [
         "</div>\n                <div class=\"project-card-bar\"></div>\n            </div>",
         "</div>\n            </div>",
+        "</article>",
     ]
     for marker in markers:
         if marker in current_content:
-            last_idx = current_content.rfind(marker) + len(marker)
-            return current_content[:last_idx] + "\n\n" + snippet + current_content[last_idx:]
+            anchor_idx = current_content.rfind(marker)
+            last_idx = anchor_idx + len(marker)
+            target_indent = _detect_line_indent(current_content, anchor_idx)
+            formatted_snippet = _normalize_indentation(snippet, target_indent)
+            return current_content[:last_idx] + "\n\n" + formatted_snippet + current_content[last_idx:]
 
     return current_content + "\n\n" + snippet
 
@@ -324,14 +371,20 @@ def generate_format_matched_file(
     if (action == "update_existing" or result.action_type == "update_existing") and result.target_to_replace:
         target = result.target_to_replace.strip()
         if target and target in current_content and result.entry_snippet:
-            return current_content.replace(target, result.entry_snippet.strip(), 1)
+            target_idx = current_content.find(target)
+            target_indent = _detect_line_indent(current_content, target_idx)
+            formatted_snippet = _normalize_indentation(result.entry_snippet, target_indent)
+            return current_content.replace(target, formatted_snippet, 1)
 
     # 2. Context Anchor Splicing for FEATURE_NEW
     if result.anchor_context and result.entry_snippet:
         anchor = result.anchor_context.strip()
         if anchor and anchor in current_content:
-            idx = current_content.find(anchor) + len(anchor)
-            return current_content[:idx] + "\n\n" + result.entry_snippet.strip() + current_content[idx:]
+            anchor_idx = current_content.find(anchor)
+            idx = anchor_idx + len(anchor)
+            target_indent = _detect_line_indent(current_content, anchor_idx)
+            formatted_snippet = _normalize_indentation(result.entry_snippet, target_indent)
+            return current_content[:idx] + "\n\n" + formatted_snippet + current_content[idx:]
 
     # 3. Fallback: Check if Gemini returned full_file_content or file_content
     full_content = result.full_file_content or result.file_content

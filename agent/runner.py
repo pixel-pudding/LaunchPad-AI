@@ -285,10 +285,18 @@ def run_agent(event: dict) -> dict:
                         exc_info=True,
                     )
 
-        # Pure byproduct, last step
+        # Next build suggestion, last step
         try:
+            current_project_context = {
+                "name": profile.get("name") or repo,
+                "summary": profile.get("summary", ""),
+                "stack": profile.get("stack", []),
+                "skill_tags": profile.get("skill_tags", []),
+            }
             artifacts["next_builds"] = suggest_next_builds(
-                memory_context["featured_projects"], memory_context["context_profile"]
+                memory_context["featured_projects"],
+                memory_context["context_profile"],
+                current_project=current_project_context,
             )
         except Exception:
             logger.error(

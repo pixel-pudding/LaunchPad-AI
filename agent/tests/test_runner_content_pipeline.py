@@ -118,7 +118,7 @@ def _patch_happy_content_pipeline(monkeypatch, pr_number=1):
     monkeypatch.setattr(
         runner,
         "suggest_next_builds",
-        lambda featured_projects, context_profile: [
+        lambda *args, **kwargs: [
             {"title": "Hosted API", "one_line_reason": "Extends the pipeline work."}
         ],
     )

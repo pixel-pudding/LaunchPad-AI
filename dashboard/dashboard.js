@@ -571,7 +571,10 @@ function renderPublishCard(decision, shouldAnimateTypewriter) {
 
     if (statusPill) statusPill.classList.remove("muted");
     if (statusText) statusText.textContent = "PUBLISH READY";
-    if (titleEl) titleEl.textContent = "Your LinkedIn post is drafted";
+    const key = decisionKey(decision);
+    const savedEdit = localStorage.getItem(`launchpad_post_edit_${key}`);
+    const isCustomEdited = !!savedEdit && savedEdit !== pkg.text;
+    const fullText = savedEdit || pkg.text || "";
 
     const hashtags = (pkg.hashtags || [])
         .map(t => `<span class="post-hashtag-chip font-mono-lp">${escapeHtml(t.startsWith("#") ? t : "#" + t)}</span>`)
@@ -583,6 +586,7 @@ function renderPublishCard(decision, shouldAnimateTypewriter) {
                 <button class="btn-copy-post font-mono-lp" id="btn-copy" onclick="copyPostContent()">Copy post &amp; open LinkedIn</button>
                 <button class="btn-copy-image font-mono-lp" id="btn-copy-img" onclick="copyPostImage()">Copy image</button>
                 <button class="btn-edit-post font-mono-lp" id="btn-edit-post" onclick="editPostContent()">${isEditingPost ? "Save" : "Edit"}</button>
+                ${isCustomEdited ? `<button class="btn-reset-post font-mono-lp" id="btn-reset-post" onclick="resetPostContent('${key}')" title="Revert to Gemini's generated draft">Reset to generated</button>` : ""}
             </div>
             <div class="post-reasoning-quote font-mono-lp">"${escapeHtml(summarizeDecision(decision))}"</div>
         </div>
@@ -593,14 +597,13 @@ function renderPublishCard(decision, shouldAnimateTypewriter) {
             </div>
         </div>
         <div class="post-hashtags-wrap" id="post-hashtags">${hashtags}</div>
-        <span class="copy-post-hint font-mono-lp" style="margin-top:4px;">Copies text + hashtags, then opens LinkedIn.</span>
+        <span class="copy-post-hint font-mono-lp" style="margin-top:4px;">${isCustomEdited ? "Custom draft saved locally · Copies text + hashtags, then opens LinkedIn." : "Copies text + hashtags, then opens LinkedIn."}</span>
     `;
 
     const textEl = document.getElementById("post-text");
-    const fullText = pkg.text || "";
     if (activeStreamInterval) clearInterval(activeStreamInterval);
 
-    if (shouldAnimateTypewriter && textEl) {
+    if (shouldAnimateTypewriter && textEl && !isCustomEdited) {
         const words = fullText.split(" ");
         let wordIdx = 0;
         textEl.innerHTML = `<span class="typewriter-cursor">▌</span>`;
@@ -733,9 +736,11 @@ function copyPostContent() {
         return;
     }
 
+    const key = decisionKey(currentPostPackage);
+    const savedEdit = localStorage.getItem(`launchpad_post_edit_${key}`);
     const artifacts = currentPostPackage.artifacts || {};
     const pkg = artifacts.post_package || {};
-    const text = pkg.text || "";
+    const text = savedEdit || pkg.text || "";
     const hashtags = (pkg.hashtags || []).map(t => t.startsWith("#") ? t : `#${t}`).join(" ");
     const fullContent = hashtags ? `${text}\n\n${hashtags}` : text;
 
@@ -802,10 +807,16 @@ function editPostContent() {
             btn.textContent = "Edit";
             btn.classList.remove("btn-save-active");
         }
-        if (currentPostPackage && currentPostPackage.artifacts && currentPostPackage.artifacts.post_package) {
-            currentPostPackage.artifacts.post_package.text = textEl.innerText.trim();
+        const editedText = textEl.innerText.trim();
+        if (currentPostPackage) {
+            const key = decisionKey(currentPostPackage);
+            localStorage.setItem(`launchpad_post_edit_${key}`, editedText);
+            if (currentPostPackage.artifacts && currentPostPackage.artifacts.post_package) {
+                currentPostPackage.artifacts.post_package.text = editedText;
+            }
         }
         showToast("Draft saved locally.");
+        renderPublishCard(currentPostPackage, false);
     } else {
         // Start editing
         isEditingPost = true;
@@ -817,6 +828,14 @@ function editPostContent() {
             btn.classList.add("btn-save-active");
         }
         showToast("Editing mode active. Click Save when finished.");
+    }
+}
+
+function resetPostContent(key) {
+    localStorage.removeItem(`launchpad_post_edit_${key}`);
+    showToast("Reset to generated draft.");
+    if (currentPostPackage) {
+        renderPublishCard(currentPostPackage, false);
     }
 }
 
