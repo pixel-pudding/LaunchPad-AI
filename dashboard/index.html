@@ -353,55 +353,65 @@
                 <p>Publish a tagged release on a connected repo to see the agent work. <a href="#overview" onclick="switchTab('landing')">Connect a repo →</a></p>
             </div>
 
-            <!-- ── Twin cards: Portfolio Updated / Publish Ready ── -->
+            <!-- ── Twin cards cockpit: Left (Portfolio + Next Build + Activity) / Right (LinkedIn Post) ── -->
             <div class="dash-twin-cards" id="dash-twin-cards" style="display:none;">
 
-                <section class="twin-card portfolio-card" id="portfolio-card">
-                    <div class="twin-card-header">
-                        <span class="twin-card-status-pill" id="portfolio-status-pill">
-                            <span class="twin-card-status-dot"></span>
-                            <span id="portfolio-status-text">PORTFOLIO UPDATED</span>
-                        </span>
-                        <span class="twin-card-title" id="portfolio-title">Merged into your site</span>
-                    </div>
-                    <div class="twin-card-body">
-                        <p class="agent-narrative-box" id="portfolio-diff-box" style="display:none;"></p>
-                        <p class="twin-card-empty" id="portfolio-empty" style="display:none;">No portfolio changes for this release.</p>
-                        <div class="twin-card-actions" id="portfolio-actions"></div>
-                    </div>
-                </section>
+                <!-- LEFT COLUMN -->
+                <div class="dash-left-column">
+                    <!-- 1. Portfolio Updated Card -->
+                    <section class="twin-card portfolio-card" id="portfolio-card">
+                        <div class="twin-card-header">
+                            <span class="twin-card-status-pill" id="portfolio-status-pill">
+                                <span class="twin-card-status-dot"></span>
+                                <span id="portfolio-status-text">PORTFOLIO UPDATED</span>
+                            </span>
+                            <span class="twin-card-title" id="portfolio-title">Merged into your site</span>
+                        </div>
+                        <div class="twin-card-body">
+                            <p class="agent-narrative-box" id="portfolio-diff-box" style="display:none;"></p>
+                            <p class="twin-card-empty" id="portfolio-empty" style="display:none;">No portfolio changes for this release.</p>
+                            <div class="twin-card-actions" id="portfolio-actions"></div>
+                        </div>
+                    </section>
 
-                <section class="twin-card publish-card" id="publish-card">
-                    <div class="twin-card-header">
-                        <span class="twin-card-status-pill" id="publish-status-pill">
-                            <span class="twin-card-status-dot"></span>
-                            <span id="publish-status-text">PUBLISH READY</span>
-                        </span>
-                        <span class="twin-card-title" id="publish-title">Your LinkedIn post is drafted</span>
-                    </div>
-                    <div class="twin-card-body" id="publish-body">
-                        <!-- Populated by dashboard.js: reasoning quote, post text, image slot, hashtags, actions -->
-                    </div>
-            </div>
-
-            <!-- ── What to Build Next Highlight Banner ─────────── -->
-            <div class="next-build-wrapper" id="next-build-card-wrapper" style="display:none; margin-bottom: 20px;">
-                <div class="quiet-footnote font-mono-lp" id="quiet-next-build-footnote" style="display:none;"></div>
-            </div>
-
-            <!-- ── Agent activity feed (Full Width right below) ── -->
-            <div class="dash-activity-grid" id="dash-activity-grid" style="display:none;">
-                <section class="activity-feed-col" style="grid-column: 1 / -1; width: 100%;">
-                    <div class="activity-feed-heading">
-                        <h2>Agent activity</h2>
-                        <span class="activity-feed-hint font-mono-lp">tap a row for reasoning</span>
-                        <button class="btn-terminal-toggle font-mono-lp" id="btn-feed-collapse" onclick="toggleActivityFeed()" title="Collapse the activity feed to focus on the release above">
-                            Collapse ▴
-                        </button>
+                    <!-- 2. What to Build Next Suggestion Card -->
+                    <div class="next-build-wrapper" id="next-build-card-wrapper" style="display:none;">
+                        <div class="quiet-footnote font-mono-lp" id="quiet-next-build-footnote" style="display:none;"></div>
                     </div>
 
-                    <div class="decisions-list" id="decision-log"></div>
-                </section>
+                    <!-- 3. Agent Activity Feed (Collapsible) -->
+                    <div class="dash-activity-grid" id="dash-activity-grid" style="display:none;">
+                        <section class="activity-feed-col" style="width: 100%;">
+                            <div class="activity-feed-heading">
+                                <h2>Agent activity</h2>
+                                <span class="activity-feed-hint font-mono-lp">tap a row for reasoning</span>
+                                <button class="btn-terminal-toggle font-mono-lp" id="btn-feed-collapse" onclick="toggleActivityFeed()" title="Collapse the activity feed to focus on the release above">
+                                    Collapse ▴
+                                </button>
+                            </div>
+
+                            <div class="decisions-list" id="decision-log"></div>
+                        </section>
+                    </div>
+                </div>
+
+                <!-- RIGHT COLUMN -->
+                <div class="dash-right-column">
+                    <!-- LinkedIn Post Card -->
+                    <section class="twin-card publish-card" id="publish-card">
+                        <div class="twin-card-header">
+                            <span class="twin-card-status-pill" id="publish-status-pill">
+                                <span class="twin-card-status-dot"></span>
+                                <span id="publish-status-text">PUBLISH READY</span>
+                            </span>
+                            <span class="twin-card-title" id="publish-title">Your LinkedIn post is drafted</span>
+                        </div>
+                        <div class="twin-card-body" id="publish-body">
+                            <!-- Populated by dashboard.js -->
+                        </div>
+                    </section>
+                </div>
+
             </div>
 
         </div>
