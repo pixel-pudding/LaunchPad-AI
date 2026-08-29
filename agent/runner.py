@@ -28,16 +28,10 @@ from agent.tools.image_tool import generate_image
 
 logger = logging.getLogger(__name__)
 
-# Small artificial pacing floor between live-terminal stage updates
-# (dashboard.js polls /api/agent-status every 350ms). The early stages
-# (webhook received -> profiling -> about to decide) have little real
-# backend work behind them, so without any floor they could complete
-# inside a single poll cycle. Kept deliberately small -- the dashboard's
-# monotonic replay (rendering every stage up to the current one on each
-# poll, never skipping or going backward) is the actual fix for
-# legibility; this is just insurance against a truly instant stage, not a
-# way to manufacture a slower-looking pipeline than the agent really runs.
-_STAGE_PACING_SECONDS = 0.4
+# Artificial pacing floor between live-terminal stage updates (2.0s).
+# Gives the frontend poller and the human eye ample time
+# to observe each stage transition from 1 -> 2 -> 3 -> 4 -> 5 -> 6.
+_STAGE_PACING_SECONDS = 2.0
 
 
 def run_agent(event: dict) -> dict:
@@ -100,6 +94,7 @@ def run_agent(event: dict) -> dict:
             "delivery_id": delivery_id,
             "started_at": started_at_iso,
         })
+        time.sleep(_STAGE_PACING_SECONDS)
     except Exception:
         pass
 
@@ -110,7 +105,6 @@ def run_agent(event: dict) -> dict:
     ensure_profile(event)
 
     try:
-        time.sleep(_STAGE_PACING_SECONDS)
         memory.set_agent_status({
             "status": "running",
             "stage": 2,
@@ -120,6 +114,7 @@ def run_agent(event: dict) -> dict:
             "delivery_id": delivery_id,
             "started_at": started_at_iso,
         })
+        time.sleep(_STAGE_PACING_SECONDS)
     except Exception:
         pass
 
@@ -131,7 +126,6 @@ def run_agent(event: dict) -> dict:
     }
 
     try:
-        time.sleep(_STAGE_PACING_SECONDS)
         memory.set_agent_status({
             "status": "running",
             "stage": 3,
@@ -141,6 +135,7 @@ def run_agent(event: dict) -> dict:
             "delivery_id": delivery_id,
             "started_at": started_at_iso,
         })
+        time.sleep(_STAGE_PACING_SECONDS)
     except Exception:
         pass
 
@@ -166,7 +161,6 @@ def run_agent(event: dict) -> dict:
         )
 
         try:
-            time.sleep(_STAGE_PACING_SECONDS)
             memory.set_agent_status({
                 "status": "running",
                 "stage": 4,
@@ -176,6 +170,7 @@ def run_agent(event: dict) -> dict:
                 "delivery_id": delivery_id,
                 "started_at": started_at_iso,
             })
+            time.sleep(_STAGE_PACING_SECONDS)
         except Exception:
             pass
 
@@ -226,7 +221,6 @@ def run_agent(event: dict) -> dict:
                 )
 
         try:
-            time.sleep(_STAGE_PACING_SECONDS)
             memory.set_agent_status({
                 "status": "running",
                 "stage": 5,
@@ -236,6 +230,7 @@ def run_agent(event: dict) -> dict:
                 "delivery_id": delivery_id,
                 "started_at": started_at_iso,
             })
+            time.sleep(_STAGE_PACING_SECONDS)
         except Exception:
             pass
 
@@ -245,20 +240,6 @@ def run_agent(event: dict) -> dict:
         pr_auto_merge_suppressed = False
 
         if decision.get("action") == "feature_new":
-            try:
-                time.sleep(_STAGE_PACING_SECONDS)
-                memory.set_agent_status({
-                    "status": "running",
-                    "stage": 5,
-                    "stage_name": "Splicing Codebase",
-                    "repo": repo,
-                    "tag": event.get("tag", ""),
-                    "delivery_id": delivery_id,
-                    "started_at": started_at_iso,
-                })
-            except Exception:
-                pass
-
             try:
                 pr = publish_to_portfolio(
                     repo, profile, decision, artifacts.get("post_package", {}), delivery_id, event.get("tag", "")
@@ -283,7 +264,6 @@ def run_agent(event: dict) -> dict:
             artifacts["portfolio_pr_merged"] = False
             if not pr_auto_merge_suppressed and config.get_portfolio_auto_merge():
                 try:
-                    time.sleep(_STAGE_PACING_SECONDS)
                     memory.set_agent_status({
                         "status": "running",
                         "stage": 6,
@@ -293,6 +273,7 @@ def run_agent(event: dict) -> dict:
                         "delivery_id": delivery_id,
                         "started_at": started_at_iso,
                     })
+                    time.sleep(_STAGE_PACING_SECONDS)
                 except Exception:
                     pass
                 try:
@@ -340,6 +321,7 @@ def run_agent(event: dict) -> dict:
 
     total_seconds = round(time.time() - start_time, 1)
     try:
+        time.sleep(_STAGE_PACING_SECONDS)
         memory.set_agent_status({
             "status": "idle",
             "stage": 6,
