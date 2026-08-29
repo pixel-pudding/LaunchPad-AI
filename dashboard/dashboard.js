@@ -578,16 +578,32 @@ function renderTwinCards(decision, shouldAnimateTypewriter) {
             chip.textContent = isAutoMerged ? "View merged PR" : "Review PR on GitHub";
             pActions.appendChild(chip);
         }
-    } else {
-        if (pStatusPill) pStatusPill.classList.add("muted");
-        if (pStatusText) pStatusText.textContent = action === "skip" ? "NOT APPLICABLE" : "NO PORTFOLIO CONNECTED";
-        if (pTitle) pTitle.textContent = action === "skip" ? "Nothing to update" : "No portfolio repo connected";
+    } else if (action === "update_existing") {
+        if (pStatusPill) pStatusPill.classList.remove("muted");
+        if (pStatusText) pStatusText.textContent = "ALREADY FEATURED";
+        if (pTitle) pTitle.textContent = "Portfolio entry preserved";
         if (pDiffBox) pDiffBox.style.display = "none";
         if (pEmpty) {
             pEmpty.style.display = "block";
-            pEmpty.textContent = action === "skip"
-                ? "This release was assessed as not portfolio-notable — nothing changed."
-                : "Connect a portfolio repo on the Overview tab to let the agent update it automatically.";
+            pEmpty.textContent = `${decision.repo || "This project"} is already featured on your live portfolio site. Your portfolio was preserved untouched.`;
+        }
+    } else if (action === "skip") {
+        if (pStatusPill) pStatusPill.classList.add("muted");
+        if (pStatusText) pStatusText.textContent = "NOT APPLICABLE";
+        if (pTitle) pTitle.textContent = "Nothing to update";
+        if (pDiffBox) pDiffBox.style.display = "none";
+        if (pEmpty) {
+            pEmpty.style.display = "block";
+            pEmpty.textContent = "This release was assessed as not portfolio-notable — nothing changed.";
+        }
+    } else {
+        if (pStatusPill) pStatusPill.classList.add("muted");
+        if (pStatusText) pStatusText.textContent = "NO PORTFOLIO CONNECTED";
+        if (pTitle) pTitle.textContent = "No portfolio repo connected";
+        if (pDiffBox) pDiffBox.style.display = "none";
+        if (pEmpty) {
+            pEmpty.style.display = "block";
+            pEmpty.textContent = "Connect a portfolio repo on the Overview tab to let the agent update it automatically.";
         }
     }
 
