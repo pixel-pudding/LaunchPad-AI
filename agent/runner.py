@@ -28,10 +28,10 @@ from agent.tools.image_tool import generate_image
 
 logger = logging.getLogger(__name__)
 
-# Artificial pacing floor between live-terminal stage updates (2.0s).
-# Gives the frontend poller and the human eye ample time
+# Artificial pacing floor between live-terminal stage updates (3.0s).
+# Gives the frontend poller, the human eye, and demo video recording ample time
 # to observe each stage transition from 1 -> 2 -> 3 -> 4 -> 5 -> 6.
-_STAGE_PACING_SECONDS = 2.0
+_STAGE_PACING_SECONDS = 3.0
 
 
 def run_agent(event: dict) -> dict:
@@ -260,22 +260,25 @@ def run_agent(event: dict) -> dict:
         else:
             logger.info("Skipping portfolio publish for action=%s (portfolio left untouched)", decision.get("action"))
 
+        # Stage 6: Auto-Merging PR (if feature_new and PR opened) OR Launch Package Staged
+        try:
+            stage_6_name = "Auto-Merging PR" if (pr_number and config.get_portfolio_auto_merge()) else "Packaging Launch Announcement"
+            memory.set_agent_status({
+                "status": "running",
+                "stage": 6,
+                "stage_name": stage_6_name,
+                "repo": repo,
+                "tag": event.get("tag", ""),
+                "delivery_id": delivery_id,
+                "started_at": started_at_iso,
+            })
+            time.sleep(_STAGE_PACING_SECONDS)
+        except Exception:
+            pass
+
         if pr_number is not None:
             artifacts["portfolio_pr_merged"] = False
             if not pr_auto_merge_suppressed and config.get_portfolio_auto_merge():
-                try:
-                    memory.set_agent_status({
-                        "status": "running",
-                        "stage": 6,
-                        "stage_name": "Auto-Merging PR",
-                        "repo": repo,
-                        "tag": event.get("tag", ""),
-                        "delivery_id": delivery_id,
-                        "started_at": started_at_iso,
-                    })
-                    time.sleep(_STAGE_PACING_SECONDS)
-                except Exception:
-                    pass
                 try:
                     merge_result = github_merge_pr(pr_repo, pr_number)
                     artifacts["portfolio_pr_merged"] = merge_result["merged"]
