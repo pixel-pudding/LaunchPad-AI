@@ -204,33 +204,36 @@ function editPortfolioRepo() {
 }
 
 // ── "Agent in a nutshell" static sample-release demo (Overview) ──────
+// Illustrative teaching content only -- not live data, no fetch involved.
 const NUTSHELL_DEMOS = [
     {
         label: "your-project v1.0.0",
         action: "feature_new",
-        repo: "your-project v1.0.0",
-        reason: "A brand-new capability with no existing portfolio entry — a new project card gets written for it.",
-        portfolio: "New project card added, pull request opened.",
-        post: "Draft ready — copy and publish.",
-        byproduct: "Byproduct: an evaluation harness could round out your portfolio."
+        reason: "A brand-new capability with no existing entry — a new project card is written.",
+        tiles: [
+            { title: "Portfolio updated", detail: "new card added, merged and live on your site" },
+            { title: "LinkedIn post ready", detail: "draft ready — copy and publish" }
+        ],
+        byproduct: "Byproduct: suggested next build — an evaluation harness."
     },
     {
         label: "your-project v1.1.0",
         action: "update_existing",
-        repo: "your-project v1.1.0",
-        reason: "Matches a project already on your portfolio — its summary is refreshed in place, never duplicated.",
-        portfolio: "Existing card rewritten, pull request opened.",
-        post: "Draft ready — copy and publish.",
-        byproduct: "Byproduct: a hosted demo would make this project stand out."
+        reason: "Already featured — this release adds something real, so the existing entry is updated.",
+        tiles: [
+            { title: "Portfolio updated", detail: "new card added, merged and live on your site" },
+            { title: "LinkedIn post ready", detail: "draft ready — copy and publish" }
+        ],
+        byproduct: "Byproduct: suggested next build — an evaluation harness."
     },
     {
         label: "your-config v2.0.1",
         action: "skip",
-        repo: "your-config v2.0.1",
-        reason: "Dependency bumps and small fixes only — nothing here changes how your portfolio should look, so nothing is published.",
-        portfolio: "Left untouched — nothing to show.",
-        post: "No post drafted.",
-        byproduct: "Byproduct: suggestion unchanged from your last release."
+        reason: "Config bump only — not portfolio-notable, so the agent leaves everything untouched.",
+        tiles: [
+            { title: "Nothing published", detail: "the agent assessed it and chose not to touch your portfolio" }
+        ],
+        byproduct: null
     }
 ];
 
@@ -255,11 +258,28 @@ function renderNutshellDemo(idx) {
         badge.className = `decision-badge font-mono-lp badge-${demo.action}`;
     }
 
-    setText("nutshell-repo", demo.repo);
     setText("nutshell-reason", demo.reason);
-    setText("nutshell-portfolio", demo.portfolio);
-    setText("nutshell-post", demo.post);
-    setText("nutshell-byproduct", demo.byproduct);
+
+    const tilesEl = document.getElementById("nutshell-tiles");
+    if (tilesEl) {
+        tilesEl.className = `nutshell-tiles${demo.tiles.length === 1 ? " single" : ""}`;
+        tilesEl.innerHTML = demo.tiles.map(t => `
+            <div class="nutshell-tile">
+                <div class="nutshell-tile-title">${escapeHtml(t.title)}</div>
+                <div class="nutshell-tile-detail">${escapeHtml(t.detail)}</div>
+            </div>
+        `).join("");
+    }
+
+    const byproductEl = document.getElementById("nutshell-byproduct");
+    if (byproductEl) {
+        if (demo.byproduct) {
+            byproductEl.style.display = "block";
+            byproductEl.textContent = demo.byproduct;
+        } else {
+            byproductEl.style.display = "none";
+        }
+    }
 }
 
 function setText(id, text) {
