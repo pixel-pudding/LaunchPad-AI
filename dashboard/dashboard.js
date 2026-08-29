@@ -293,7 +293,16 @@ let currentAgentExecutionState = "idle"; // "idle" | "running"
 let isTerminalExpanded = false;
 let lastRunDuration = "";
 let currentRunningRepo = "";
-let highestStageSeen = 1;
+
+// Highest stage already shown, per delivery_id -- not a single counter.
+// Keying by delivery_id is what makes a reload mid-run replay 1..N cleanly
+// (a fresh page has no entry for this run yet, so it starts from whatever
+// the first poll reports and fills in the stages below it as done) while
+// also making a brand-new run immune to a previous run's higher stage
+// number bleeding across, even if the two runs' polls land back-to-back
+// with no "idle" tick ever observed in between.
+let highestStageByDelivery = new Map();
+let lastSeenRunningDeliveryId = null;
 
 function renderTerminalHeader() {
     const titleEl = document.getElementById("terminal-status-title");
@@ -340,11 +349,23 @@ async function pollAgentStatus() {
         const stageItems = [1, 2, 3, 4, 5, 6].map(n => document.getElementById(`stage-${n}`));
 
         if (statusData && statusData.status === "running") {
+            const deliveryId = statusData.delivery_id || "";
+            const isNewRun = deliveryId !== lastSeenRunningDeliveryId;
+            lastSeenRunningDeliveryId = deliveryId;
             currentRunningRepo = statusData.repo || "";
-            const currentStage = Math.max(statusData.stage || 1, highestStageSeen);
-            highestStageSeen = currentStage;
 
-            if (!isAgentCurrentlyRunning) {
+            // Monotonic per-run replay: a fresh page load (or a brand-new
+            // run this tab hasn't seen yet) has no entry for this
+            // delivery_id, so it starts at 0 and fills in every stage up
+            // to whatever the first poll reports -- never a blank, never
+            // a skip. Once shown, a stage never renders lower again for
+            // this same run, even if a stale/out-of-order poll response
+            // reports a smaller number.
+            const previousHighest = highestStageByDelivery.get(deliveryId) || 0;
+            const currentStage = Math.max(statusData.stage || 1, previousHighest);
+            highestStageByDelivery.set(deliveryId, currentStage);
+
+            if (!isAgentCurrentlyRunning || isNewRun) {
                 isAgentCurrentlyRunning = true;
                 currentAgentExecutionState = "running";
                 isTerminalExpanded = true;
@@ -369,7 +390,8 @@ async function pollAgentStatus() {
             // Finished execution.
             isAgentCurrentlyRunning = false;
             currentAgentExecutionState = "idle";
-            highestStageSeen = 1;
+            highestStageByDelivery.clear();
+            lastSeenRunningDeliveryId = null;
 
             stageItems.forEach(el => { if (el) el.className = "terminal-stage-item done"; });
 
