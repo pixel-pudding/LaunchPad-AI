@@ -1476,6 +1476,20 @@ input:checked + .toggle-slider:before {
     color: var(--text-secondary);
 }
 
+.post-top-action-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.post-actions-row-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
 .post-actions-row {
     display: flex;
     align-items: center;
@@ -1538,16 +1552,24 @@ input:checked + .toggle-slider:before {
     color: var(--text-muted);
     font-weight: 600;
     font-size: 13px;
-    padding: 11px 12px;
+    padding: 11px 14px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-dark);
     cursor: pointer;
     font-family: var(--font-sans);
+    transition: all 0.2s ease;
 }
 
 .btn-edit-post:hover {
     background: var(--bg-surface-elevated);
     color: var(--text-primary);
+}
+
+.btn-edit-post.btn-save-active {
+    background: var(--sage-bg);
+    border-color: var(--sage-border);
+    color: var(--sage-text);
+    font-weight: 700;
 }
 
 .copy-post-hint {

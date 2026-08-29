@@ -11,6 +11,7 @@ let isAgentCurrentlyRunning = false;
 let lastSeenDecisionId = null;
 let expandedDeliveryIds = new Set();
 let feedInitialized = false;
+let isEditingPost = false;
 
 // ── Tab Switching Navigation ──────────────────────────────────────────
 function switchTab(tabName) {
@@ -486,7 +487,9 @@ function renderDashboard(decisions, animateLatest) {
         }
     }
 
-    renderTwinCards(latest, animateLatest);
+    if (!isEditingPost) {
+        renderTwinCards(latest, animateLatest);
+    }
     renderActivityFeed(decisions);
     renderByproductFootnote(latest);
 }
@@ -575,7 +578,14 @@ function renderPublishCard(decision, shouldAnimateTypewriter) {
         .join("");
 
     body.innerHTML = `
-        <div class="post-reasoning-quote font-mono-lp">"${escapeHtml(summarizeDecision(decision))}"</div>
+        <div class="post-top-action-bar">
+            <div class="post-actions-row-top">
+                <button class="btn-copy-post font-mono-lp" id="btn-copy" onclick="copyPostContent()">Copy post &amp; open LinkedIn</button>
+                <button class="btn-copy-image font-mono-lp" id="btn-copy-img" onclick="copyPostImage()">Copy image</button>
+                <button class="btn-edit-post font-mono-lp" id="btn-edit-post" onclick="editPostContent()">${isEditingPost ? "Save" : "Edit"}</button>
+            </div>
+            <div class="post-reasoning-quote font-mono-lp">"${escapeHtml(summarizeDecision(decision))}"</div>
+        </div>
         <div class="post-body-grid">
             <div class="post-text-content" id="post-text"></div>
             <div class="post-image-box" id="post-image-container"${pkg.image_url ? "" : ' style="display:none;"'}>
@@ -583,12 +593,7 @@ function renderPublishCard(decision, shouldAnimateTypewriter) {
             </div>
         </div>
         <div class="post-hashtags-wrap" id="post-hashtags">${hashtags}</div>
-        <div class="post-actions-row">
-            <button class="btn-copy-post font-mono-lp" id="btn-copy" onclick="copyPostContent()">Copy post &amp; open LinkedIn</button>
-            <button class="btn-copy-image font-mono-lp" id="btn-copy-img" onclick="copyPostImage()">Copy image</button>
-            <button class="btn-edit-post font-mono-lp" id="btn-edit-post" onclick="editPostContent()">Edit</button>
-        </div>
-        <span class="copy-post-hint font-mono-lp">Copies text + hashtags, then opens LinkedIn.</span>
+        <span class="copy-post-hint font-mono-lp" style="margin-top:4px;">Copies text + hashtags, then opens LinkedIn.</span>
     `;
 
     const textEl = document.getElementById("post-text");
@@ -616,6 +621,7 @@ function renderPublishCard(decision, shouldAnimateTypewriter) {
 
 function renderByproductFootnote(decision) {
     const footnoteEl = document.getElementById("quiet-next-build-footnote");
+    const wrapperEl = document.getElementById("next-build-card-wrapper");
     if (!footnoteEl) return;
 
     const artifacts = decision.artifacts || {};
@@ -625,11 +631,19 @@ function renderByproductFootnote(decision) {
         const title = first.title || first.text || first.name || "";
         const reason = first.one_line_reason || first.reason || "";
         if (title || reason) {
+            if (wrapperEl) wrapperEl.style.display = "block";
             footnoteEl.style.display = "block";
-            footnoteEl.innerHTML = `<span class="footnote-label">BYPRODUCT — WHAT TO BUILD NEXT</span>${escapeHtml(title)}${reason ? `<br>${escapeHtml(reason)}` : ""}`;
+            footnoteEl.innerHTML = `
+                <div style="display:flex; flex-direction:column; gap:4px;">
+                    <span class="footnote-label font-mono-lp" style="color:var(--sage-text); font-weight:700; font-size:10.5px; letter-spacing:0.08em;">💡 WHAT TO BUILD NEXT</span>
+                    <strong style="font-size:14px; color:var(--text-primary);">${escapeHtml(title)}</strong>
+                    ${reason ? `<span style="font-size:12.5px; color:var(--text-secondary); line-height:1.5;">${escapeHtml(reason)}</span>` : ""}
+                </div>
+            `;
             return;
         }
     }
+    if (wrapperEl) wrapperEl.style.display = "none";
     footnoteEl.style.display = "none";
 }
 
@@ -779,16 +793,30 @@ function editPostContent() {
     const btn = document.getElementById("btn-edit-post");
     if (!textEl) return;
 
-    const isEditing = textEl.getAttribute("contenteditable") === "true";
-    if (isEditing) {
+    if (isEditingPost) {
+        // Save
+        isEditingPost = false;
         textEl.setAttribute("contenteditable", "false");
-        if (btn) btn.textContent = "Edit";
-        showToast("Draft updated.");
+        textEl.classList.remove("editing-active");
+        if (btn) {
+            btn.textContent = "Edit";
+            btn.classList.remove("btn-save-active");
+        }
+        if (currentPostPackage && currentPostPackage.artifacts && currentPostPackage.artifacts.post_package) {
+            currentPostPackage.artifacts.post_package.text = textEl.innerText.trim();
+        }
+        showToast("Draft saved locally.");
     } else {
+        // Start editing
+        isEditingPost = true;
         textEl.setAttribute("contenteditable", "true");
+        textEl.classList.add("editing-active");
         textEl.focus();
-        if (btn) btn.textContent = "Save";
-        showToast("You can edit the post draft directly.");
+        if (btn) {
+            btn.textContent = "Save";
+            btn.classList.add("btn-save-active");
+        }
+        showToast("Editing mode active. Click Save when finished.");
     }
 }
 
