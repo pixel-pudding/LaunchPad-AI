@@ -1254,10 +1254,33 @@ input:checked + .toggle-slider:before {
 /* ── Twin cards: Portfolio Updated / Publish Ready ──────────── */
 .dash-twin-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    grid-template-columns: minmax(360px, 1fr) minmax(400px, 1.15fr);
     align-items: start;
     gap: 20px;
     margin-bottom: 26px;
+}
+
+@media (max-width: 960px) {
+    .dash-twin-cards {
+        grid-template-columns: 1fr;
+    }
+}
+
+.dash-left-column {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+.dash-right-column {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.next-build-wrapper {
+    width: 100%;
 }
 
 .twin-card {

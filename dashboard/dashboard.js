@@ -471,7 +471,7 @@ function renderDashboard(decisions, animateLatest) {
 
     if (emptyState) emptyState.style.display = "none";
     if (twinCards) twinCards.style.display = "grid";
-    if (activityGrid) activityGrid.style.display = "grid";
+    if (activityGrid) activityGrid.style.display = "block";
 
     const latest = decisions[0];
     if (titleEl) {
