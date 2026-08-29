@@ -12,7 +12,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="/static/dashboard.css?v=41">
+    <link rel="stylesheet" href="/static/dashboard.css?v=42">
 </head>
 
 <body>
@@ -382,14 +382,16 @@
                     <div class="twin-card-body" id="publish-body">
                         <!-- Populated by dashboard.js: reasoning quote, post text, image slot, hashtags, actions -->
                     </div>
-                </section>
-
             </div>
 
-            <!-- ── Agent activity feed + byproduct aside ────────── -->
-            <div class="dash-activity-grid" id="dash-activity-grid" style="display:none;">
+            <!-- ── What to Build Next Highlight Banner ─────────── -->
+            <div class="next-build-wrapper" id="next-build-card-wrapper" style="display:none; margin-bottom: 20px;">
+                <div class="quiet-footnote font-mono-lp" id="quiet-next-build-footnote" style="display:none;"></div>
+            </div>
 
-                <section class="activity-feed-col">
+            <!-- ── Agent activity feed (Full Width right below) ── -->
+            <div class="dash-activity-grid" id="dash-activity-grid" style="display:none;">
+                <section class="activity-feed-col" style="grid-column: 1 / -1; width: 100%;">
                     <div class="activity-feed-heading">
                         <h2>Agent activity</h2>
                         <span class="activity-feed-hint font-mono-lp">tap a row for reasoning</span>
@@ -400,10 +402,6 @@
 
                     <div class="decisions-list" id="decision-log"></div>
                 </section>
-
-                <aside class="dash-aside-col">
-                    <p class="quiet-footnote font-mono-lp" id="quiet-next-build-footnote" style="display:none;"></p>
-                </aside>
             </div>
 
         </div>
@@ -421,7 +419,7 @@
         </div>
     </footer>
 
-    <script src="/static/dashboard.js?v=41"></script>
+    <script src="/static/dashboard.js?v=42"></script>
 </body>
 
 </html>
