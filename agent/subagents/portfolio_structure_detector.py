@@ -78,7 +78,7 @@ You must handle two actions based on the action field in the payload:
    - If it ALREADY exists: Do NOT create a duplicate card! Automatically treat it as "update_existing": set action_type = "update_existing", set target_to_replace to the exact existing project snippet, and provide the updated entry in entry_snippet.
    - If it is truly new and not present anywhere in current_file_content:
      - Set action_type = "feature_new".
-     - Set anchor_context: An EXACT, UNIQUE 2-5 line excerpt from current_file_content right AFTER which the new project entry should be placed (such as the end of the preceding project card or array item, strictly INSIDE the projects container/list).
+     - Set anchor_context: An EXACT, UNIQUE 2-5 line excerpt from current_file_content right AFTER which the new project entry should be placed (such as the end of the preceding project card or array item, strictly INSIDE the projects container/list). NEVER include the parent container's closing tag (such as </div> of .grid / .projects-container or </section>) in anchor_context! The anchor MUST be the closing tag of the previous card itself so the new card is inserted cleanly inside the grid container.
      - Set entry_snippet: The newly crafted project entry matching the codebase's existing style and structure.
      - If new_project.demo_url is provided and non-empty, include the Live link alongside GitHub repo. If demo_url is empty, only render the GitHub link.
      - If new_project.image_url is provided, use it directly as the image src in <img src="..." /> or image property.
