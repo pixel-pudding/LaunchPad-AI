@@ -1595,6 +1595,23 @@ input:checked + .toggle-slider:before {
     font-weight: 700;
 }
 
+.btn-reset-post {
+    background: transparent;
+    color: var(--skip-text);
+    font-size: 11px;
+    padding: 11px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px dashed var(--border-dark);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    transition: all 0.2s ease;
+}
+
+.btn-reset-post:hover {
+    background: var(--bg-surface-sunken);
+    color: var(--text-primary);
+}
+
 .copy-post-hint {
     font-family: var(--font-mono);
     font-size: 10.5px;
