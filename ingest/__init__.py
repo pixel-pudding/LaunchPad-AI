@@ -190,6 +190,22 @@ async def webhook(
         message["delivery_id"],
     )
 
+    # Immediately signal Stage 1 live telemetry so dashboard opens and glows instantly
+    try:
+        from datetime import datetime, timezone
+        from agent.memory import set_agent_status
+        set_agent_status({
+            "status": "running",
+            "stage": 1,
+            "stage_name": "Webhook Received",
+            "repo": message["repo"],
+            "tag": message["tag"],
+            "delivery_id": delivery_id,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:
+        pass
+
     # 4. Publish to Pub/Sub
     project = os.environ["GOOGLE_CLOUD_PROJECT"]
     topic = f"projects/{project}/topics/launchpad-ai-events"
