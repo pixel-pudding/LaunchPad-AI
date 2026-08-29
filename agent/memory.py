@@ -153,20 +153,42 @@ def save_decision(delivery_id: str, record: dict[str, Any], client: firestore.Cl
 
 
 def get_agent_status(client: firestore.Client | None = None) -> dict[str, Any]:
-    """Returns the active or last agent execution status for live terminal telemetry."""
+    """Returns the most recently STARTED run's live-terminal status.
+
+    Each run gets its own doc (see set_agent_status()) keyed by
+    delivery_id, instead of every run overwriting one shared doc — so a
+    page reload mid-run, or two runs that happen to overlap, can never
+    read a status blended from two different deliveries. Every write
+    within one run carries the same started_at, so ordering by it and
+    taking the top match always returns whichever run is newest, whether
+    it's still running or already idle/completed.
+    """
     client = client or get_client()
-    doc = client.collection("config").document("agent_status").get()
-    if not doc.exists:
-        return {"status": "idle"}
-    data = doc.to_dict()
-    ts = data.get("ts")
-    if ts is not None and hasattr(ts, "isoformat"):
-        data["ts"] = ts.isoformat()
-    return data
+    docs = (
+        client.collection("agent_status")
+        .order_by("started_at", direction=firestore.Query.DESCENDING)
+        .limit(1)
+        .stream()
+    )
+    for doc in docs:
+        data = doc.to_dict()
+        ts = data.get("ts")
+        if ts is not None and hasattr(ts, "isoformat"):
+            data["ts"] = ts.isoformat()
+        return data
+    return {"status": "idle"}
 
 
 def set_agent_status(data: dict[str, Any], client: firestore.Client | None = None) -> None:
-    """Updates the real-time agent execution telemetry state."""
+    """Writes this run's live-terminal telemetry to ITS OWN doc, keyed by
+    delivery_id — not one doc every run shares and overwrites. Every
+    stage-transition call from runner.py already carries "delivery_id";
+    the final idle/completed call carries "last_delivery_id" instead
+    (it's describing a run that just finished, not one in progress), so
+    that's checked too — both land in the same per-run doc, keeping one
+    run's full lifecycle (stage 1 through idle) together.
+    """
     client = client or get_client()
+    run_key = data.get("delivery_id") or data.get("last_delivery_id") or "unknown"
     record = {**data, "ts": datetime.now(timezone.utc).isoformat()}
-    client.collection("config").document("agent_status").set(record, merge=True)
+    client.collection("agent_status").document(run_key).set(record, merge=True)

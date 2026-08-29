@@ -28,13 +28,16 @@ from agent.tools.image_tool import generate_image
 
 logger = logging.getLogger(__name__)
 
-# Artificial pacing between live-terminal stage updates (dashboard.js polls
-# /api/agent-status every 350ms). The early stages (webhook received ->
-# profiling -> about to decide) have little real backend work behind them,
-# so without this delay they'd flip past in under a poll cycle or two --
-# too fast to actually read. Later stages naturally linger longer because
-# of real Gemini/GitHub calls; this just guarantees a readable floor.
-_STAGE_PACING_SECONDS = 0.9
+# Small artificial pacing floor between live-terminal stage updates
+# (dashboard.js polls /api/agent-status every 350ms). The early stages
+# (webhook received -> profiling -> about to decide) have little real
+# backend work behind them, so without any floor they could complete
+# inside a single poll cycle. Kept deliberately small -- the dashboard's
+# monotonic replay (rendering every stage up to the current one on each
+# poll, never skipping or going backward) is the actual fix for
+# legibility; this is just insurance against a truly instant stage, not a
+# way to manufacture a slower-looking pipeline than the agent really runs.
+_STAGE_PACING_SECONDS = 0.4
 
 
 def run_agent(event: dict) -> dict:
