@@ -124,41 +124,29 @@
                     </div>
                 </div>
 
-                <!-- Interactive "Agent in a nutshell" sample-release demo -->
+                <!-- Interactive "Agent in a nutshell" sample-release demo:
+                     input (you ship) -> output (agent does), side by side -->
                 <div class="hero-demo-col">
                     <div class="nutshell-card">
-                        <div class="nutshell-header">
-                            <span class="nutshell-eyebrow font-mono-lp">THE AGENT IN A NUTSHELL</span>
-                            <p class="nutshell-sub">Pick a sample release to see what the agent does with it.</p>
-                            <p class="nutshell-benefit">No forgotten portfolio updates, no blank LinkedIn draft to stare at — the agent reads the release, makes a real feature/update/skip call, and always tells you why in plain language.</p>
-                            <div class="nutshell-chips" id="nutshell-chips"></div>
-                        </div>
-                        <div class="nutshell-body">
-                            <div class="nutshell-top-row">
-                                <span class="decision-badge font-mono-lp" id="nutshell-badge"></span>
-                                <span class="nutshell-repo" id="nutshell-repo"></span>
-                            </div>
-                            <p class="nutshell-reason" id="nutshell-reason"></p>
+                        <span class="nutshell-eyebrow font-mono-lp">THE AGENT IN A NUTSHELL</span>
 
-                            <div class="nutshell-row">
-                                <span class="nutshell-row-num sage">1</span>
-                                <div>
-                                    <div class="nutshell-row-title">Your portfolio site</div>
-                                    <div class="nutshell-row-detail" id="nutshell-portfolio"></div>
-                                </div>
+                        <div class="nutshell-columns">
+                            <div class="nutshell-col-input">
+                                <span class="nutshell-col-label">YOU SHIP</span>
+                                <div class="nutshell-chips" id="nutshell-chips"></div>
+                                <p class="nutshell-work-line"><span class="tick">✓</span>your total work: publishing the release</p>
                             </div>
-                            <div class="nutshell-row">
-                                <span class="nutshell-row-num yellow">2</span>
-                                <div>
-                                    <div class="nutshell-row-title">LinkedIn post</div>
-                                    <div class="nutshell-row-detail" id="nutshell-post"></div>
-                                </div>
+
+                            <span class="nutshell-arrow" aria-hidden="true">→</span>
+
+                            <div class="nutshell-col-output">
+                                <span class="decision-badge font-mono-lp" id="nutshell-badge"></span>
+                                <p class="nutshell-reason" id="nutshell-reason"></p>
+                                <div class="nutshell-tiles" id="nutshell-tiles"></div>
                             </div>
-                            <p class="nutshell-byproduct" id="nutshell-byproduct"></p>
                         </div>
-                        <div class="nutshell-footer">
-                            your total work: publishing the release
-                        </div>
+
+                        <p class="nutshell-byproduct" id="nutshell-byproduct"></p>
                     </div>
                 </div>
             </section>
