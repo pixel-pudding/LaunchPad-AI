@@ -28,6 +28,14 @@ from agent.tools.image_tool import generate_image
 
 logger = logging.getLogger(__name__)
 
+# Artificial pacing between live-terminal stage updates (dashboard.js polls
+# /api/agent-status every 350ms). The early stages (webhook received ->
+# profiling -> about to decide) have little real backend work behind them,
+# so without this delay they'd flip past in under a poll cycle or two --
+# too fast to actually read. Later stages naturally linger longer because
+# of real Gemini/GitHub calls; this just guarantees a readable floor.
+_STAGE_PACING_SECONDS = 0.9
+
 
 def run_agent(event: dict) -> dict:
     """
@@ -99,7 +107,7 @@ def run_agent(event: dict) -> dict:
     ensure_profile(event)
 
     try:
-        time.sleep(0.4)
+        time.sleep(_STAGE_PACING_SECONDS)
         memory.set_agent_status({
             "status": "running",
             "stage": 2,
@@ -120,7 +128,7 @@ def run_agent(event: dict) -> dict:
     }
 
     try:
-        time.sleep(0.4)
+        time.sleep(_STAGE_PACING_SECONDS)
         memory.set_agent_status({
             "status": "running",
             "stage": 3,
@@ -155,7 +163,7 @@ def run_agent(event: dict) -> dict:
         )
 
         try:
-            time.sleep(0.4)
+            time.sleep(_STAGE_PACING_SECONDS)
             memory.set_agent_status({
                 "status": "running",
                 "stage": 4,
@@ -215,7 +223,7 @@ def run_agent(event: dict) -> dict:
                 )
 
         try:
-            time.sleep(0.4)
+            time.sleep(_STAGE_PACING_SECONDS)
             memory.set_agent_status({
                 "status": "running",
                 "stage": 5,
@@ -254,7 +262,7 @@ def run_agent(event: dict) -> dict:
             artifacts["portfolio_pr_merged"] = False
             if not pr_auto_merge_suppressed and config.get_portfolio_auto_merge():
                 try:
-                    time.sleep(0.4)
+                    time.sleep(_STAGE_PACING_SECONDS)
                     memory.set_agent_status({
                         "status": "running",
                         "stage": 6,
