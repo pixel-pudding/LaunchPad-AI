@@ -294,9 +294,10 @@ let isTerminalExpanded = false;
 let lastRunDuration = "";
 let currentRunningRepo = "";
 
-// Highest stage already shown, per delivery_id -- not a single counter.
+const MIN_STAGE_GLOW_MS = 3000;
 let highestStageByDelivery = new Map();
 let visualStageByDelivery = new Map();
+let stageActivatedAtByDelivery = new Map();
 let lastSeenRunningDeliveryId = null;
 
 function renderTerminalHeader() {
@@ -360,18 +361,23 @@ async function pollAgentStatus() {
             lastSeenRunningDeliveryId = deliveryId;
             currentRunningRepo = statusData.repo || "";
 
-            // Progressive visual transition: even if backend jumps ahead,
-            // advance the visual stage step-by-step so every stage is
-            // distinctly visible in demo recordings.
             const targetStage = statusData.stage || 1;
             const previousHighest = highestStageByDelivery.get(deliveryId) || 0;
             const currentStage = Math.max(targetStage, previousHighest);
             highestStageByDelivery.set(deliveryId, currentStage);
 
+            const now = Date.now();
             let visualStage = visualStageByDelivery.get(deliveryId) || 0;
-            if (visualStage < currentStage) {
+            let stageActivatedAt = stageActivatedAtByDelivery.get(deliveryId) || 0;
+
+            if (visualStage === 0 || isNewRun) {
+                visualStage = 1;
+                visualStageByDelivery.set(deliveryId, 1);
+                stageActivatedAtByDelivery.set(deliveryId, now);
+            } else if (visualStage < currentStage && (now - stageActivatedAt >= MIN_STAGE_GLOW_MS)) {
                 visualStage += 1;
                 visualStageByDelivery.set(deliveryId, visualStage);
+                stageActivatedAtByDelivery.set(deliveryId, now);
             }
 
             if (!isAgentCurrentlyRunning || isNewRun) {
@@ -390,11 +396,29 @@ async function pollAgentStatus() {
 
             renderStageVisuals(deliveryId, visualStage);
         } else if (isAgentCurrentlyRunning && (!statusData || statusData.status === "idle")) {
+            // Check if visual stages still need to complete their 3s display
+            const deliveryId = lastSeenRunningDeliveryId || "";
+            const now = Date.now();
+            let visualStage = visualStageByDelivery.get(deliveryId) || 6;
+            let stageActivatedAt = stageActivatedAtByDelivery.get(deliveryId) || 0;
+
+            if (visualStage < 6 && (now - stageActivatedAt >= MIN_STAGE_GLOW_MS)) {
+                visualStage += 1;
+                visualStageByDelivery.set(deliveryId, visualStage);
+                stageActivatedAtByDelivery.set(deliveryId, now);
+                renderStageVisuals(deliveryId, visualStage);
+                return;
+            } else if (visualStage < 6) {
+                renderStageVisuals(deliveryId, visualStage);
+                return;
+            }
+
             // Finished execution.
             isAgentCurrentlyRunning = false;
             currentAgentExecutionState = "idle";
             highestStageByDelivery.clear();
             visualStageByDelivery.clear();
+            stageActivatedAtByDelivery.clear();
             lastSeenRunningDeliveryId = null;
 
             stageItems.forEach(el => { if (el) el.className = "terminal-stage-item done"; });
