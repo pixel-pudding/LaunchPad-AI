@@ -295,13 +295,8 @@ let lastRunDuration = "";
 let currentRunningRepo = "";
 
 // Highest stage already shown, per delivery_id -- not a single counter.
-// Keying by delivery_id is what makes a reload mid-run replay 1..N cleanly
-// (a fresh page has no entry for this run yet, so it starts from whatever
-// the first poll reports and fills in the stages below it as done) while
-// also making a brand-new run immune to a previous run's higher stage
-// number bleeding across, even if the two runs' polls land back-to-back
-// with no "idle" tick ever observed in between.
 let highestStageByDelivery = new Map();
+let visualStageByDelivery = new Map();
 let lastSeenRunningDeliveryId = null;
 
 function renderTerminalHeader() {
@@ -338,6 +333,17 @@ function toggleTerminalExpansion() {
     renderTerminalHeader();
 }
 
+function renderStageVisuals(deliveryId, currentVisualStage) {
+    const stageItems = [1, 2, 3, 4, 5, 6].map(n => document.getElementById(`stage-${n}`));
+    stageItems.forEach((el, idx) => {
+        if (!el) return;
+        const stageNum = idx + 1;
+        el.className = stageNum < currentVisualStage ? "terminal-stage-item done"
+            : stageNum === currentVisualStage ? "terminal-stage-item active"
+            : "terminal-stage-item pending";
+    });
+}
+
 // ── Real-Time Agent Telemetry Polling (/api/agent-status) ────────────
 async function pollAgentStatus() {
     try {
@@ -354,16 +360,19 @@ async function pollAgentStatus() {
             lastSeenRunningDeliveryId = deliveryId;
             currentRunningRepo = statusData.repo || "";
 
-            // Monotonic per-run replay: a fresh page load (or a brand-new
-            // run this tab hasn't seen yet) has no entry for this
-            // delivery_id, so it starts at 0 and fills in every stage up
-            // to whatever the first poll reports -- never a blank, never
-            // a skip. Once shown, a stage never renders lower again for
-            // this same run, even if a stale/out-of-order poll response
-            // reports a smaller number.
+            // Progressive visual transition: even if backend jumps ahead,
+            // advance the visual stage step-by-step so every stage is
+            // distinctly visible in demo recordings.
+            const targetStage = statusData.stage || 1;
             const previousHighest = highestStageByDelivery.get(deliveryId) || 0;
-            const currentStage = Math.max(statusData.stage || 1, previousHighest);
+            const currentStage = Math.max(targetStage, previousHighest);
             highestStageByDelivery.set(deliveryId, currentStage);
+
+            let visualStage = visualStageByDelivery.get(deliveryId) || 0;
+            if (visualStage < currentStage) {
+                visualStage += 1;
+                visualStageByDelivery.set(deliveryId, visualStage);
+            }
 
             if (!isAgentCurrentlyRunning || isNewRun) {
                 isAgentCurrentlyRunning = true;
@@ -379,18 +388,13 @@ async function pollAgentStatus() {
                 timerBadge.textContent = `${elapsed}s elapsed`;
             }
 
-            stageItems.forEach((el, idx) => {
-                if (!el) return;
-                const stageNum = idx + 1;
-                el.className = stageNum < currentStage ? "terminal-stage-item done"
-                    : stageNum === currentStage ? "terminal-stage-item active"
-                    : "terminal-stage-item pending";
-            });
+            renderStageVisuals(deliveryId, visualStage);
         } else if (isAgentCurrentlyRunning && (!statusData || statusData.status === "idle")) {
             // Finished execution.
             isAgentCurrentlyRunning = false;
             currentAgentExecutionState = "idle";
             highestStageByDelivery.clear();
+            visualStageByDelivery.clear();
             lastSeenRunningDeliveryId = null;
 
             stageItems.forEach(el => { if (el) el.className = "terminal-stage-item done"; });
