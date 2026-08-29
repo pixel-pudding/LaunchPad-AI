@@ -192,9 +192,8 @@
                         <div class="step-num font-mono-lp">2</div>
                         <h3 class="connect-title">Pick your portfolio repo</h3>
                         <p class="connect-desc">
-                            The agent updates your <code>projects.json</code> and <code>skills.json</code> and opens
-                            a pull request — your site renders them in its own design. If your portfolio doesn't use
-                            that convention, releases open a review pull request instead of merging automatically.
+                            Updates <code>projects.json</code> and <code>skills.json</code> and opens a pull request
+                            — your site renders them in its own design.
                         </p>
                         <div class="target-repo-box" id="target-repo-box">
                             <div class="repo-input-wrapper" id="repo-input-wrapper">
@@ -216,6 +215,7 @@
                                 </div>
                             </div>
                         </div>
+                        <p class="connect-hint font-mono-lp" style="margin-bottom:14px;">Non-convention portfolios get a review PR instead of an automatic merge.</p>
 
                         <!-- Auto-Merge toggle — the ONE actionable control for this setting -->
                         <div class="automerge-row">
@@ -405,6 +405,9 @@
                     <div class="activity-feed-heading">
                         <h2>Agent activity</h2>
                         <span class="activity-feed-hint font-mono-lp">tap a row for reasoning</span>
+                        <button class="btn-terminal-toggle font-mono-lp" id="btn-feed-collapse" onclick="toggleActivityFeed()" title="Collapse the activity feed to focus on the release above">
+                            Collapse ▴
+                        </button>
                     </div>
 
                     <div class="decisions-list" id="decision-log"></div>
