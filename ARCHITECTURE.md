@@ -2,109 +2,116 @@
 
 **All Things Agentic Hackathon · Taskmaster Track**
 
-> **One-sentence pitch:** *An autonomous career agent that manages your hireability — watching what you build on GitHub, maintaining a live model of your skills against the jobs you want, deciding how each project changes your standing, preparing publish-ready materials, and recommending what to build next.*
+> **One-sentence pitch:** *An autonomous agent that keeps a developer's portfolio and LinkedIn in sync with what they ship — deciding, on each GitHub release, whether the work is worth featuring as new, folding into an existing entry, or skipping entirely, then acting on that decision.*
 
 ---
 
 ## 1. System Architecture
 
+The system is event-driven and decoupled: ingestion returns instantly, and the agent does its work asynchronously in the background. Every Google Cloud service is chosen for a specific engineering reason (see §5).
+
 ```mermaid
 flowchart TD
-    subgraph Trigger ["1. Event Ingestion"]
-        GH[GitHub Release / Published] -->|HMAC-signed Webhook| CR_Ingest["Cloud Run: POST /webhook"]
-        SM[(Secret Manager<br/>Webhook Secret)] -.->|Verify HMAC SHA-256| CR_Ingest
-        CR_Ingest -->|Publish event & Return 200 OK| PS_Topic["Pub/Sub Topic<br/>launchpad-ai-events"]
+    subgraph Ingest ["1 · Event Ingestion"]
+        GH["GitHub Release<br/>(action: published)"] -->|HMAC-signed webhook| CRIngest["Cloud Run: ingest"]
+        SM[("Secret Manager<br/>webhook secret + GitHub App key")] -.->|verify HMAC SHA-256| CRIngest
+        CRIngest -->|publish event, return 200 OK| Topic["Pub/Sub topic<br/>launchpad-ai-events"]
     end
 
-    subgraph AsyncWorker ["2. Asynchronous Execution & Hardening"]
-        PS_Topic -->|OIDC Auth Push| CR_Process["Cloud Run: POST /process"]
-        PS_Topic -.->|Retry Policy / DLQ| DLQ["Dead-Letter Topic<br/>launchpad-ai-dead-letter"]
-        CR_Process -->|Idempotency Check| FS_Idemp[("Firestore: idempotency/{delivery_id}")]
-        CR_Process -->|Mint RS256 JWT Token| GH_Auth["infra/github_auth.py"]
-        SM -.->|GitHub App .pem Key| GH_Auth
+    subgraph Async ["2 · Asynchronous Execution"]
+        Topic -->|OIDC-authenticated push| CRProc["Cloud Run: POST /process"]
+        Topic -.->|retry policy / dead-letter| DLQ["Pub/Sub DLQ<br/>launchpad-ai-dead-letter"]
+        CRProc -->|per-delivery + atomic per-release| Idem[("Firestore idempotency<br/>{repo}:{tag}")]
+        SM -.->|RS256 JWT exchange| GHAuth["GitHub App auth"]
     end
 
-    subgraph AgentCore ["3. Google ADK Agent Core (Gemini 3.5 Flash)"]
-        CR_Process -->|run_agent event| RootAgent["ADK Root Orchestrator"]
-        RootAgent --> RepoAnalyst["Repo Analyst<br/>GitHub API + Vision"]
-        RootAgent --> Strategist["Career Strategist<br/>LLM Multi-way Decision"]
-        FS_Memory[("Firestore Memory<br/>projects · skill_map · targets")] <-->|Grounding Context| Strategist
-        
-        Strategist -->|skip / not_ready| LogDecision["Log Decision to Firestore"]
-        Strategist -->|feature_new / update_existing| Actions["Action Subagents"]
-        
-        subgraph ActionAgents ["Action Execution"]
-            Actions --> ReadmeAuthor["README Author<br/>GitHub PR Tool"]
-            Actions --> Publisher["Portfolio Publisher<br/>Card PR + Imagen Preview"]
-            Actions --> Announcer["Announcer Subagent<br/>Voice-matched Post Package"]
-            Actions --> Roadmap["Roadmap Planner<br/>Skill Gaps vs Live JDs"]
-            Actions --> SelfReviewer["Self-Reviewer<br/>Rubric Critique Pass"]
-        end
+    subgraph Agent ["3 · Google ADK Agent — Gemini 3.5 Flash on Vertex AI"]
+        CRProc -->|run_agent event| Analyst["Release Analyst<br/>(deterministic repo/stack profiling)"]
+        Analyst --> Curator["Relevance Curator<br/>ADK LlmAgent · structured decision"]
+        Memory[("Firestore memory<br/>featured projects · profile")] <-->|grounding context| Curator
+
+        Curator -->|skip| LogSkip["Log decision · no action"]
+        Curator -->|feature_new / update_existing| Content["Content Writer<br/>card + LinkedIn draft"]
+        Content --> Image["Image Tool (Imagen)"]
+        Image --> Review["Self-Reviewer<br/>one critique/revision pass"]
+        Review --> Announce["Announcer<br/>assembles post package"]
+
+        Curator -->|feature_new only| Publisher["Portfolio Publisher<br/>detect structure → open PR"]
+        Publisher -->|auto-merge where enabled| Merge["Portfolio PR merged<br/>live site updated"]
+        Curator -.->|optional byproduct| NextBuild["Next-Build Suggester"]
     end
 
-    subgraph UserInterface ["4. Human-in-the-Loop & Observability"]
-        LogDecision --> FS_Decisions[("Firestore: decisions/{delivery_id}")]
-        Actions --> FS_Decisions
-        FS_Decisions --> Dashboard["Dashboard UI: GET /<br/>Decision Log + Post Review Card"]
-        Dashboard --> CopyAll["📋 1-Tap Copy & Share to LinkedIn"]
-        RootAgent -.->|OpenTelemetry| CloudTrace["Google Cloud Trace & Logs"]
+    subgraph Output ["4 · Persistence & Surface"]
+        LogSkip --> FSDecisions[("Firestore: decisions/{delivery_id}")]
+        Announce --> FSDecisions
+        Merge --> FSDecisions
+        FSDecisions --> Dashboard["Dashboard (GET /)<br/>live decision feed + copy-ready post"]
     end
 ```
 
 ---
 
-## 2. Decoupled Ingestion & Execution Model
+## 2. Decoupled ingestion & execution model
 
-GitHub webhook deliveries require an HTTP response within **10 seconds**; however, multi-step LLM reasoning, code analysis, and PR generation take significantly longer (15–60s).
+Ingestion and processing are split across two Cloud Run entry points connected by Pub/Sub. This is the core architectural decision that makes the agent a genuine background worker:
 
-LaunchPad-AI solves this through a decoupled **Serverless Event-Driven Architecture**:
+1. **Ingest** verifies the webhook's HMAC signature (secret from Secret Manager), publishes the event to Pub/Sub, and returns `200 OK` in well under a second. GitHub never waits on the agent.
+2. **Pub/Sub** delivers the event to `/process` via an OIDC-authenticated push subscription. Its retry policy and dead-letter queue mean a transient failure is retried or parked, never silently lost.
+3. **`/process`** runs the ADK agent pipeline. It is idempotent at two levels: per-delivery (each webhook delivery ID processed once) and per-release (an atomic Firestore `create()` on `{repo}:{tag}` — because GitHub fires multiple webhooks for one release within milliseconds, a non-atomic check-then-write would race).
 
-1. **`POST /webhook` (Ingest Router)**:
-   - Reads the raw body and `X-Hub-Signature-256` header.
-   - Verifies the HMAC signature using `github-webhook-secret` from **Google Cloud Secret Manager**.
-   - Validates the event (`release.published`).
-   - Normalizes the payload into the Pub/Sub schema and publishes to `projects/launchpad-ai-506616/topics/launchpad-ai-events`.
-   - Returns `200 OK` in < 200ms.
-
-2. **`POST /process` (Worker Seam)**:
-   - Invoked asynchronously by Pub/Sub Push Subscription with **OIDC token verification** (`pubsub-invoker@...`).
-   - **Idempotency Gate**: Checks Firestore `idempotency/{delivery_id}`. If already processed, acks and stops.
-   - **GitHub App Auth**: Generates a short-lived installation access token using the GitHub App's `.pem` key from Secret Manager.
-   - Invokes `agent.runner.run_agent(event)` using **Google ADK** and **Gemini 3.5 Flash on Vertex AI**.
-   - Saves final decision, artifacts, and execution metrics to Firestore.
+Each stage in the pipeline has its own error boundary and **fails safe**: if the curator errors, it defaults to `skip` rather than publishing something unreviewed; if an action subagent fails (image, PR, draft), the others still complete. One failure never crashes the run or the webhook.
 
 ---
 
-## 3. Security & IAM Architecture
+## 3. The agentic core — the Relevance Curator
 
-| Component | Security Mechanism | Implementation |
+The heart of the system is a genuine multi-way decision, not a rule table. The Relevance Curator is a **Google ADK `LlmAgent`** running **Gemini 3.5 Flash on Vertex AI** through the ADK Runner, with a Pydantic-schema-constrained structured output. On each release it is given:
+
+- the **release profile** (repo, summary, stack, README) from the Release Analyst,
+- the **already-featured projects** (from Firestore memory), and
+- the **developer's context/profile**.
+
+It returns one of three actions plus written reasoning:
+
+| Action | Meaning |
+|:---|:---|
+| `feature_new` | Substantial, not-yet-featured work → new portfolio card + LinkedIn draft |
+| `update_existing` | Real new capability on an already-featured project → refreshed announcement, no duplicate |
+| `skip` | Trivial / doc-only / WIP → no action |
+
+Because the curator reads what's already featured before deciding, it never duplicates a project across releases — its memory of the developer's public presence is what keeps the portfolio coherent over time.
+
+---
+
+## 4. Firestore memory model
+
+Firestore is the agent's serverless memory and audit log:
+
+- `projects/{repo}` — projects currently featured on the portfolio (what the curator consults to avoid duplicates).
+- `context/profile` — the developer's synthesized profile (interests, focus areas), used as decision context; bootstrapped from public GitHub data if absent.
+- `config/portfolio` — the target portfolio repo and auto-merge preference.
+- `decisions/{delivery_id}` — full audit log of every decision (`feature_new`, `update_existing`, `skip`), its reasoning, self-review outcome, and any generated PR link.
+- `idempotency/{...}` — per-delivery and per-release dedupe records.
+
+---
+
+## 5. Google Cloud stack summary
+
+| Service | Role | Why it was the right choice |
 |:---|:---|:---|
-| **Webhook Ingest** | HMAC SHA-256 Signature Verification | Secret stored in **Secret Manager**, verified before payload processing |
-| **Pub/Sub Push to Cloud Run** | OIDC Service Account Authentication | Dedicated `pubsub-invoker` service account with `roles/run.invoker` |
-| **GitHub App API Access** | RS256 JWT Token Exchange | Private key in Secret Manager, auto-refreshes short-lived tokens (1 hr) |
-| **Vertex AI Access** | Workload Identity / Service Account | Uses Vertex AI in `asia-south1` via `GOOGLE_GENAI_USE_VERTEXAI=1` |
-| **Fault Tolerance** | Dead-Letter Queue (DLQ) | Failed messages route to `launchpad-ai-dead-letter` after 5 delivery attempts |
+| **Vertex AI (Gemini 3.5 Flash)** | The decision engine | Service-account auth (no API keys), structured output we can gate real actions on |
+| **Google ADK** | Agent orchestration | Clean `LlmAgent` + Runner with schema-constrained output; the curator can't return free-form mush |
+| **Cloud Run** | Hosts ingest + agent | Scales to zero between releases, spins up on the webhook — fits a bursty, event-triggered workload with no always-on cost |
+| **Cloud Pub/Sub** | Event backbone | Decouples ingest from processing (background execution), with retries + DLQ for failure tolerance |
+| **Cloud Firestore** | Memory + audit log | Serverless document store — the "memory layer" needs zero infrastructure |
+| **Secret Manager** | Secrets | Webhook secret and GitHub App private key, never in code or env |
+| **Imagen** | Post image generation | On-theme image for the LinkedIn post package |
 
 ---
 
-## 4. Firestore Memory Model
+## 6. Security & IAM
 
-- `projects/{repo}`: Catalog of analyzed repositories (summary, stack, skill tags, portfolio status).
-- `skill_map/current`: Live skill scores and recognized gap areas.
-- `targets/roles`: Target job profiles, requirements, and reference job descriptions.
-- `roadmap/current`: Next recommended project build to close hireability gaps.
-- `decisions/{delivery_id}`: Full audit log of agent decisions (`feature_new`, `update_existing`, `not_ready`, `skip`), rationale, self-review results, and generated PR links.
-- `voice/profile`: Personal tone guidelines and writing samples for LinkedIn generation.
-- `idempotency/{delivery_id}`: Deduplication timestamps ensuring at-most-once execution.
-
----
-
-## 5. Google Cloud Stack Summary
-
-- **Compute**: Cloud Run (`launchpad-ai` service in `asia-south1`)
-- **Reasoning**: Gemini 3.5 Flash via Google GenAI SDK & Vertex AI (`GOOGLE_GENAI_USE_VERTEXAI=1`)
-- **Agent Orchestration**: Google Agent Development Kit (ADK)
-- **Eventing & Retries**: Google Cloud Pub/Sub with Dead-Letter Policy
-- **State & Memory**: Google Cloud Firestore (Native Mode)
-- **Secrets Management**: Google Cloud Secret Manager
-- **Observability**: OpenTelemetry instrumentation via Google Cloud Trace & Cloud Logging
+- **Webhook authenticity:** every inbound webhook is verified with HMAC-SHA256 against the secret in Secret Manager before anything is published.
+- **GitHub App auth:** the agent authenticates as a GitHub App via an RS256 JWT minted from a private key held in Secret Manager — scoped, revocable, no personal tokens.
+- **Internal push auth:** Pub/Sub → `/process` uses an OIDC-authenticated push subscription, so the processing endpoint only accepts events from the topic.
+- **Fail-safe default:** any curator failure resolves to `skip`, so an internal error can never cause an unreviewed publish.
