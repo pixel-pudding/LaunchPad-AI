@@ -105,7 +105,7 @@ Firestore is the agent's serverless memory and audit log:
 | **Cloud Pub/Sub** | Event backbone | Decouples ingest from processing (background execution), with retries + DLQ for failure tolerance |
 | **Cloud Firestore** | Memory + audit log | Serverless document store — the "memory layer" needs zero infrastructure |
 | **Secret Manager** | Secrets | Webhook secret and GitHub App private key, never in code or env |
-| **Imagen** | Post image generation | On-theme image for the LinkedIn post package |
+
 
 ---
 
