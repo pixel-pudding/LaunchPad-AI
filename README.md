@@ -1,145 +1,219 @@
-# 🚀 LaunchPad-AI
+# LaunchPad-AI
 
-### Autonomous Career Agent · All Things Agentic Hackathon (Taskmaster Track)
+### An autonomous agent that keeps your developer presence in sync with what you ship
+**All Things Agentic Hackathon · Taskmaster Track**
 
-> **An autonomous career agent that manages your hireability** — watching what you build on GitHub, maintaining a live model of your skills against the jobs you want, deciding how each project changes your standing, preparing publish-ready materials, and recommending what to build next to close the gap.
+> You publish a GitHub release. LaunchPad-AI decides — on its own — whether that release is worth showing the world, and if it is, it updates your live portfolio and drafts your LinkedIn post. You ship. It handles the rest.
 
-[![Live Dashboard](https://img.shields.io/badge/Live%20Demo-Cloud%20Run-blue?style=for-the-badge&logo=googlecloud)](https://launchpad-ai-757438144336.asia-south1.run.app/)
-[![Gemini 3.5 Flash](https://img.shields.io/badge/Model-Gemini%203.5%20Flash-purple?style=for-the-badge&logo=googlegemini)](https://cloud.google.com/vertex-ai)
-[![Google ADK](https://img.shields.io/badge/Framework-Google%20ADK-green?style=for-the-badge)](https://google.github.io/adk-docs/)
-
----
-
-## 🏆 Hackathon Compliance Checklist
-
-| Mandatory Requirement | Implementation in LaunchPad-AI |
-|:---|:---|
-| **Gemini 3.5+ Model** | Powered by `gemini-3.5-flash` via Vertex AI (`GOOGLE_GENAI_USE_VERTEXAI=1`) in `asia-south1` |
-| **≥1 Google Agent Framework** | **Google ADK (Python)** for multi-agent orchestration and subagent routing |
-| **≥1 Google Cloud Infrastructure** | **4 Google Cloud Services**: Cloud Run + Cloud Pub/Sub + Cloud Firestore + Secret Manager |
-| **Taskmaster Track Fit** | Autonomous trigger from GitHub Releases → multi-way LLM decision → automated PR generation + post preparation |
-| **Observability** | Integrated OpenTelemetry distributed tracing viewable in **Google Cloud Trace** |
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Cloud%20Run-4F684F?style=for-the-badge&logo=googlecloud)](https://launchpad-ai-757438144336.asia-south1.run.app/)
+[![Gemini 3.5 Flash](https://img.shields.io/badge/Model-Gemini%203.5%20Flash-E8C96A?style=for-the-badge&logo=googlegemini)](https://cloud.google.com/vertex-ai)
+[![Google ADK](https://img.shields.io/badge/Framework-Google%20ADK-5D7A5B?style=for-the-badge)](https://google.github.io/adk-docs/)
 
 ---
 
-## 🏛️ System Architecture
+## The friction it solves
 
-LaunchPad-AI uses a decoupled, event-driven serverless architecture on Google Cloud:
+Developers ship constantly and then never update the places people actually look — their portfolio and LinkedIn. The tedious part isn't writing one post; it's the *judgment call* on every release: is this worth featuring as new, an update to something already shown, or nothing at all?
+
+LaunchPad-AI is an agent that makes that decision autonomously and acts on it — no dashboard clicking, no manual editing, no redeploy. **The agent's decision is the product.** It's not a bot that posts on every release; it's an agent with the judgment to know when *not* to.
+
+---
+
+## What makes it agentic (not a script)
+
+The core is a **Relevance Curator**: a real [Google ADK](https://google.github.io/adk-docs/) `LlmAgent` running **Gemini 3.5 Flash on Vertex AI** through the ADK Runner, producing a schema-constrained structured decision. On each release it receives the shipped repo's profile, the projects already featured, and the developer's interests — and returns one of three actions with written reasoning:
+
+| Decision | When | What it does |
+|:---|:---|:---|
+| `feature_new` | A substantial, not-yet-featured project | Writes a new portfolio card + drafts the LinkedIn post |
+| `update_existing` | A real new capability on an already-featured project | Refreshes the LinkedIn announcement; no duplicate entry |
+| `skip` | Trivial bumps, doc-only fixes, WIP | Leaves everything untouched |
+
+It **explains every decision in its own words** ("a dependency bump with no new capability — not notable enough to feature"), and it **remembers what's already public** (via Firestore) so it never posts the same project twice. Correctly *declining* to act is the clearest evidence that it's reasoning, not automating.
+
+---
+
+## Architecture
+
+Event-driven and decoupled end to end. Each Google Cloud service is chosen for a specific engineering reason.
 
 ```
 GitHub Release (published)
-       │ HMAC-signed Webhook
-       ▼
-Cloud Run [POST /webhook]  ──(Secret Manager)──► Fast 200 OK (<200ms)
-       │
-       ▼
-Google Cloud Pub/Sub [launchpad-ai-events]  ──(Dead-Letter Queue)──► [launchpad-ai-dead-letter]
-       │ OIDC Authenticated Push
-       ▼
-Cloud Run [POST /process]
-       ├─ Idempotency Check (Firestore deduplication on delivery_id)
-       ├─ GitHub App Auth (RS256 JWT exchange via Secret Manager .pem)
-       ▼
-Google ADK Agent Orchestrator (Gemini 3.5 Flash on Vertex AI)
-       ├─ Repo Analyst: Ingests repository tree, README, tech stack
-       ├─ Career Strategist: Multi-way decision (feature_new | update_existing | not_ready | skip)
-       ├─ Action Subagents: README PR + Portfolio Card PR + Announcer Post Package
-       ├─ Self-Reviewer & Roadmap Planner: Validates claims & recommends next build
-       ▼
-Cloud Firestore Memory & Decision Logs
-       ▼
-Dashboard UI [GET /]: Decision Log + 1-Tap LinkedIn Post Review Card
+      │ HMAC-signed webhook
+      ▼
+Cloud Run  [ingest]  ──(Secret Manager: webhook secret)──►  fast 200 OK
+      │
+      ▼
+Cloud Pub/Sub  [launchpad-ai-events]  ──(retries + dead-letter)──►  [launchpad-ai-dead-letter]
+      │ OIDC-authenticated push
+      ▼
+Cloud Run  [POST /process]
+      ├─ Idempotency (Firestore: per-delivery + atomic per-release {repo}:{tag})
+      ├─ GitHub App auth (RS256 JWT via Secret Manager .pem)
+      ▼
+Google ADK Agent — Gemini 3.5 Flash on Vertex AI
+      ├─ Release Analyst      → deterministic repo/stack profiling
+      ├─ Relevance Curator    → the genuine multi-way LLM decision (feature/update/skip)
+      ├─ Content Writer       → project card + LinkedIn draft
+      ├─ Image Tool (Imagen)  → post image
+      ├─ Self-Reviewer        → one critique/revision pass on the draft
+      ├─ Portfolio Publisher  → opens a PR to the portfolio repo (feature_new only)
+      └─ Next-Build Suggester → optional byproduct footnote
+      ▼
+Cloud Firestore — memory (featured projects, profile) + decision log
+      ▼
+Dashboard [GET /] — live decision feed + copy-ready LinkedIn post
 ```
 
-*For in-depth architecture diagrams, security models, and data contracts, see [ARCHITECTURE.md](ARCHITECTURE.md).*
+**Why each piece:**
+- **Cloud Run** — scales to zero between releases and spins up on the webhook; matches a bursty, event-triggered workload with no always-on cost.
+- **Pub/Sub** — decouples ingest from processing so the webhook returns instantly and the agent works in the background; its dead-letter queue and retries make a transient failure recoverable instead of lost.
+- **Vertex AI (Gemini 3.5 Flash)** — service-account auth (no API keys) and structured output we can gate real actions on.
+- **Firestore** — the agent's serverless memory: featured projects, developer profile, and a full decision log.
+- **Secret Manager** — holds the webhook secret and the GitHub App private key.
+
+Every stage has its own error handling and **fails safe**: if the curator errors, it defaults to `skip` — never publishes something unreviewed. Each action subagent fails independently, so one failure never takes down the run. Portfolio changes are attempted **only** on `feature_new`, so an update or a skip can never mutate the live site.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full diagram and data contracts.
 
 ---
 
-## ⚡ Quickstart & Local Evaluation
+## How the portfolio gets updated
 
-### Prerequisites
-- Python 3.12+
-- Google Cloud CLI (`gcloud`) with ADC configured (`gcloud auth application-default login`)
+When the agent features a new project, the **Portfolio Publisher** detects where projects live in the target repo (HTML cards, JSX/React, Astro, Markdown) and opens a pull request that inserts the new card in the repo's own native format. On repos where auto-merge is enabled, the PR is merged so the live site updates hands-free; otherwise it's left open for review. Detection confidence is explicit — when the structure can't be confidently located, the agent instead prepares the card content in a standalone file for the developer to place, rather than editing code it isn't sure about. Fully reliable unattended editing of every possible portfolio shape is an ongoing area of work.
 
-### 1. Clone & Install Dependencies
+---
+
+## Tech stack
+
+**Google ADK** (agent orchestration) · **Gemini 3.5 Flash on Vertex AI** (the decision) · **Cloud Run** · **Cloud Pub/Sub** · **Cloud Firestore** · **Secret Manager** · **FastAPI** · **Python 3.11**
+
+**External data:** GitHub Releases API + GitHub App (release events, repo contents, pull requests) — the agent's trigger and action surface.
+
+---
+
+## Spin-up & local reproducibility
+
+### 1. Prerequisites
+- **Python** 3.11 or 3.12
+- **Google Cloud CLI (`gcloud`)** installed and authenticated ([install guide](https://cloud.google.com/sdk/docs/install))
+- A **Google Cloud project** with Vertex AI, Cloud Run, Firestore, and Pub/Sub APIs enabled
+
+### 2. Clone & environment setup
 ```bash
 git clone https://github.com/pixel-pudding/LaunchPad-AI.git
 cd LaunchPad-AI
 
-# Install package and dev dependencies
+python -m venv .venv
+# Windows (PowerShell):
+.\.venv\Scripts\Activate.ps1
+# macOS / Linux:
+source .venv/bin/activate
+
 pip install -e ".[dev]"
 ```
 
-### 2. Run the Strategist / Curator Evaluation Suite
-LaunchPad-AI includes a 10-case evaluation suite and hard-gate canary tests validating the LLM decision accuracy:
-
+### 3. Configure environment
 ```bash
-# Run canary test gates
-python -m pytest eval/test_curator_canaries.py -v
+cp .env.example .env
+```
+Set in `.env`:
+```env
+GOOGLE_GENAI_USE_VERTEXAI=1
+GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+GOOGLE_CLOUD_LOCATION=asia-south1
+GEMINI_MODEL=gemini-3.5-flash
+GITHUB_APP_ID=your-github-app-id     # optional for local; mocked in the test suite
+PORTFOLIO_AUTO_MERGE=1
+```
+Authenticate with Application Default Credentials:
+```bash
+gcloud auth application-default login
+gcloud config set project your-gcp-project-id
+```
 
-# Run the full 10-case evaluation against Vertex AI Gemini 3.5 Flash
+### 4. Run the tests & the decision evaluation
+```bash
+# Full unit test suite (99 tests across agent, ingest, and eval)
+pytest
+
+# The decision canaries — the two hardest traps:
+#   trivial patch to a featured project must SKIP (not auto-update)
+#   major release to a featured project must UPDATE (not duplicate)
+pytest eval/test_curator_canaries.py -v
+
+# Full evaluation against real Gemini 3.5 Flash on Vertex AI
 python -m eval.run_curator_eval
 ```
 
-### 3. Run the Server Locally
+### 5. Run the server & dashboard locally
 ```bash
-cp .env.example .env
-# Edit .env with your Google Cloud Project ID
-
 uvicorn server:app --host 0.0.0.0 --port 8080 --reload
 ```
-Open `http://localhost:8080` to access the Dashboard.
+- Dashboard: [`http://localhost:8080`](http://localhost:8080)
+- Health check: [`http://localhost:8080/health`](http://localhost:8080/health)
+- Agent status API: [`http://localhost:8080/api/agent-status`](http://localhost:8080/api/agent-status)
 
----
-
-## 🚀 Google Cloud Deployment
-
-### 1. Deploy Cloud Run Service
+### 6. Deploy to Google Cloud Run
 ```bash
-./infra/deploy.sh
+gcloud run deploy launchpad-ai \
+  --source . \
+  --project your-gcp-project-id \
+  --region asia-south1 \
+  --allow-unauthenticated \
+  --port 8080 \
+  --memory 512Mi \
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=your-gcp-project-id,GOOGLE_CLOUD_LOCATION=asia-south1,\
+GOOGLE_GENAI_USE_VERTEXAI=1,GEMINI_MODEL=gemini-3.5-flash,GITHUB_APP_ID=your-app-id,PORTFOLIO_AUTO_MERGE=1"
 ```
-
-### 2. Configure Pub/Sub OIDC Push Auth & Dead-Letter Queue
+Or run the deploy script:
 ```bash
-./infra/setup_pubsub_auth.sh
+bash ./infra/deploy.sh
+```
+Then provision the Pub/Sub topic, OIDC push subscription, and dead-letter queue (`infra/setup_pubsub_auth.sh`), and point your GitHub App's webhook at the ingest endpoint for `release` events.
+
+---
+
+## Repository structure
+
+```
+agent/
+  runner.py                 # the frozen seam: run_agent(event) — orchestrates the pipeline
+  config.py                 # config resolution (Firestore-first, env fallback); enforces Gemini 3.5+
+  memory.py                 # Firestore accessors (projects, profile, decisions, config)
+  subagents/
+    relevance_curator.py    # the genuine ADK LlmAgent decision — the agentic core
+    release_analyst.py      # deterministic repo/stack profiling
+    content_writer.py       # project card + LinkedIn draft
+    self_reviewer.py        # one critique/revision pass
+    portfolio_publisher.py  # opens the portfolio PR (feature_new only)
+    portfolio_structure_detector.py  # detects where projects live in the target repo
+    portfolio_repo_picker.py# finds the user's portfolio repo regardless of name
+    profile_bootstrapper.py # synthesizes a profile from GitHub if none exists
+    announcer.py            # assembles the post package
+    next_build_suggester.py # optional byproduct
+  tools/
+    github_tool.py          # GitHub App auth, PR create/merge
+    image_tool.py           # Imagen image generation
+eval/                       # curator evaluation + canary gates + placeholder guard
+ingest/                     # HMAC webhook verification + Pub/Sub publish + release dedup
+infra/                      # deploy + Pub/Sub/OIDC setup, GitHub App auth, Firestore seed
+server.py                   # FastAPI: /process, dashboard, /api/*
+dashboard/                  # live decision-feed UI
 ```
 
 ---
 
-## 📂 Repository Structure
+## Findings & learnings
 
-```
-LaunchPad-AI/
-├── agent/                  # Google ADK Agent Core & Subagents
-│   ├── agent.py            # Root orchestrator & subagents
-│   ├── config.py           # Model version checks (Gemini 3.5+)
-│   ├── memory.py           # Firestore memory accessors
-│   ├── runner.py           # The run_agent(event) entrypoint seam
-│   ├── subagents/          # Curator, Analyst, Announcer, Reviewer subagents
-│   └── tools/              # GitHub App tools & external integrations
-├── dashboard/              # Clean Light-Mode Dashboard UI
-│   ├── index.html          # Decision log + Post review card
-│   ├── dashboard.css       # Polished responsive design & badges
-│   └── dashboard.js        # Dynamic fetch & 1-tap copy/share logic
-├── eval/                   # ADK Evaluation Suite & Canaries
-│   ├── curator_cases.py    # 10 labeled test cases
-│   ├── run_curator_eval.py # Live Vertex AI evaluation runner
-│   └── test_curator_canaries.py # Pytest canary validation gates
-├── ingest/                 # FastAPI Webhook Ingest Router
-├── infra/                  # GCP Setup, Deploy Scripts & Auth Helpers
-│   ├── deploy.sh           # Cloud Run deployment script
-│   ├── github_auth.py      # GitHub App RS256 JWT installation token helper
-│   └── setup_pubsub_auth.sh # OIDC push auth & DLQ setup script
-├── ARCHITECTURE.md         # Full architectural design & Mermaid diagrams
-├── BUILD_PLAN.md           # Master hackathon execution plan
-├── WORK_SPLIT.md           # Multi-agent collaboration contracts
-├── server.py               # Main FastAPI server (Ingest + Worker + Dashboard)
-├── Dockerfile              # Production multi-stage container
-└── pyproject.toml          # Project configuration & dependencies
-```
+- **The hard part of an agent is the decision, not the plumbing** — and making that decision *legible* (written reasoning per action) is what makes it feel like an agent instead of a script.
+- **Live systems surprise you.** One release was creating three decision records because GitHub fires three webhooks (`published`/`released`/`created`) with distinct delivery IDs. The fix: accept only `published`, plus an atomic per-release dedupe using Firestore's `create()` (a check-then-write races, since the duplicates arrive within milliseconds). This passed every unit test — we only found it by running the real system.
+- **Decoupling is what makes "runs in the background" true.** Pub/Sub between ingest and processing, per-stage failure isolation, and fail-safe defaults are what turn a demo into something that survives a bad network day.
 
 ---
 
-## 👥 Team
-- **Aditi (`[CC]`)** — Agent Brain, ADK Orchestration, Reasoning, Prompts & Evals
-- **Ameya (`[AG]`)** — Cloud Infrastructure, Event Ingestion, Security, Auth & Frontend Dashboard
+## Team
+
+**Aditi** ([pixel-pudding](https://github.com/pixel-pudding)) · **Ameya** ([AmeyaSingh23](https://github.com/AmeyaSingh23))
+
+**Built for the All Things Agentic Hackathon with Google ADK**, Gemini 3.5 Flash on Vertex AI, Cloud Run, Pub/Sub, and Firestore.
