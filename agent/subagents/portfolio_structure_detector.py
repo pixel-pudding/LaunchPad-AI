@@ -80,9 +80,9 @@ You must handle two actions based on the action field in the payload:
      - Set action_type = "feature_new".
      - Set anchor_context: An EXACT, UNIQUE 2-5 line excerpt from current_file_content right AFTER which the new project entry should be placed (such as the end of the preceding project card or array item, strictly INSIDE the projects container/list). NEVER include the parent container's closing tag (such as </div> of .grid / .projects-container or </section>) in anchor_context! The anchor MUST be the closing tag of the previous card itself so the new card is inserted cleanly inside the grid container.
      - Set entry_snippet: The newly crafted project entry matching the codebase's existing style and structure.
-     - If new_project.demo_url is provided and non-empty, include the Live link alongside GitHub repo. If demo_url is empty, only render the GitHub link.
-     - If new_project.image_url is provided, use it directly as the image src in <img src="..." /> or image property.
-     - In tags / stack chips, render 2 to 4 rich tags prioritizing meaningful frameworks, architectural concepts, and tools from project.stack (e.g., TypeScript, React, Next.js, WebSockets, OpenTelemetry) matching the style of existing cards in the file.
+      - If new_project.demo_url is provided and non-empty, include the Live link alongside GitHub repo. If demo_url is empty, only render the GitHub link. Always include the visible text label ('GitHub' / 'Live') inside the <a> tag right after the <svg> icon so button text is never omitted.
+      - If new_project.image_url is provided, use it directly as the image src in <img src="..." /> or image property.
+      - In tags / stack chips, render 2 to 4 rich tags prioritizing meaningful frameworks, architectural concepts, and tools from project.stack (e.g., TypeScript, React, Next.js, WebSockets, OpenTelemetry) matching the style of existing cards in the file.
 
 Also provide full_file_content as the complete updated file.
 Return ONLY structured output matching the schema.
