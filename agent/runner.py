@@ -98,11 +98,12 @@ def run_agent(event: dict) -> dict:
     except Exception:
         pass
 
-    # Auto-bootstrap profile from GitHub if missing (before curator runs,
-    # because the curator consumes context/profile).
-    from agent.subagents.profile_bootstrapper import ensure_profile
+    # Auto-bootstrap profile and legacy portfolio projects from GitHub if missing
+    # (before curator runs, because the curator consumes context/profile and featured_projects).
+    from agent.subagents.profile_bootstrapper import ensure_profile, ensure_portfolio_projects
 
     ensure_profile(event)
+    ensure_portfolio_projects(event)
 
     try:
         memory.set_agent_status({

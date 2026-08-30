@@ -167,3 +167,54 @@ def ensure_profile(event: dict[str, Any]) -> dict[str, Any]:
             exc_info=True,
         )
         return DEFAULT_PROFILE
+
+
+def ensure_portfolio_projects(event: dict[str, Any]) -> None:
+    """If a portfolio repo is connected, scans the portfolio source code (index.html,
+    projects.json, etc.) to discover and register any already-featured projects into
+    Firestore projects memory. This guarantees that legacy projects already present
+    on the site are correctly curated as 'update_existing' rather than 'feature_new'.
+    """
+    try:
+        portfolio_repo = config.get_portfolio_repo()
+        if not portfolio_repo:
+            return
+
+        token = event.get("_github_token", "")
+        if not token:
+            return
+
+        import re
+        from agent.tools.github_tool import github_get_file, github_list_repo_shallow
+
+        existing = memory.list_projects()
+        indexed_repos = {p.get("repo") for p in existing if p.get("repo")}
+
+        files = github_list_repo_shallow(portfolio_repo, token)
+        candidate_files = [
+            f for f in files
+            if f.endswith((".html", ".json", ".jsx", ".tsx", ".astro", ".md", ".vue"))
+        ]
+
+        for fname in candidate_files[:4]:
+            content = github_get_file(portfolio_repo, fname, token)
+            if not content:
+                continue
+
+            matches = re.findall(r"github\.com/([a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-]+)", content)
+            for found_repo in set(matches):
+                if found_repo.lower() == portfolio_repo.lower() or found_repo.endswith((".png", ".jpg", ".svg", ".gif")):
+                    continue
+                if found_repo not in indexed_repos:
+                    memory.save_project(found_repo, {
+                        "name": found_repo.split("/")[-1],
+                        "status": "featured",
+                        "portfolio_file": fname,
+                        "source": "portfolio_scan",
+                    })
+                    indexed_repos.add(found_repo)
+                    logger.info("Auto-indexed existing portfolio project %s from %s", found_repo, fname)
+
+    except Exception:
+        logger.warning("ensure_portfolio_projects failed gracefully", exc_info=True)
+
