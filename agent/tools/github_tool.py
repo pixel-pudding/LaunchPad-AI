@@ -266,7 +266,8 @@ def github_list_repo_shallow(repo: str, max_files: int = 40) -> list[str]:
     level, NOT a full recursive tree walk, to keep this cheap and
     read-only. Returns relative paths. GET calls only; never writes.
     """
-    headers = _auth_headers()
+    owner = repo.split("/")[0] if "/" in repo else None
+    headers = _get_headers_for_owner(owner)
     paths: list[str] = []
 
     root_resp = requests.get(f"{_GITHUB_API}/repos/{repo}/contents", headers=headers, timeout=10)
